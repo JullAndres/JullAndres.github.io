@@ -1,6 +1,6 @@
 ---
 layout: single
-title: 📦 Salesforce: Local Platform Deployment
+title: Salesforce: Local Platform Deployment
 excerpt: "El objetivo de esta Prueba de Concepto es establecer un modelo de despliegue local estandarizado utilizando exclusivamente herramientas de Salesforce DX (Developer Experience) y Git local.
 
 En este modelo, la Org de Salesforce se mantiene como la "Fuente de la Verdad", pero el desarrollador utiliza su entorno local como "puente de control". Este enfoque permit:"
