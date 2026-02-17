@@ -205,7 +205,7 @@ No es el [Manifiesto Hacker](https://phrack.org/issues/7/3). El `package.xml` no
 ## Generar el `package.xml`
 En un flujo profesional, no movemos "todo" sino sólo lo que hemos construido. El `package.xml` define este alcance.
 
-**Identificar qué metadatos existen:** Antes de crear el archivo, el desarrollador debe saber qué **[**tipos de metadatos**](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen. `sf org list metadata-types`
+**Identificar qué metadatos existen:** Antes de crear el archivo, el desarrollador debe saber qué **[tipos de metadatos](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen. `sf org list metadata-types`
 
 Esta instruccion retorna una lista de tipos (ej. **ApexClass**, **CustomField**, **Layout**). Esto te confirma cómo escribir el nombre del tipo correctamente en el XML
 
@@ -341,6 +341,7 @@ Time: 608
 Dry-run complete.
 ````
 ### Monitoreo y Quick Deploy
+
 **Monitorear** el progreso de la **validación** desde la **Org** destino: 
 
 - Setup > **Deployment Status >** Dar click sobre **View Details** y luego sobre **Quick Deploy”**
