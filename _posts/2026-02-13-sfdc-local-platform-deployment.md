@@ -1,11 +1,13 @@
 ---
 layout: single
-title: Salesforce Local Platform Deployment
+title: Local Platform Deployment - Salesforce
 excerpt: "Actualmente, un proyecto puede carecer de una infraestructura de DevOps automatizada (CI/CD) y repositorios remotos. Esto genera riesgos de sobreescritura de código, pérdida de cambios y una falta de visibilidad sobre lo que se despliega entre los ambientes de Desarrollo. integración, UAT, etc."
 date: 2026-02-13
 classes: wide
 header:
+  teaser: /assets/images/sfdc-local-platform-deployment/salesforce-dx.webp
   teaser_home_page: true
+  icon: /assets/images/salesforce.png
 categories:
   - Salesforce
   - DevOps
@@ -70,13 +72,11 @@ Para asegurar que el código extraído de la Org cumple con las mejores práctic
     sf update
     sf plugins --core
     sf plugins install code-analyzer
-    sf plugins install @salesforce/sfdx-scanner
     ```
   
 - **Verificación:**
     ```
     sf code-analyzer rules
-    sf scanner rule list
     ```
 
 ## Source Control System
@@ -187,7 +187,20 @@ fi
 
 ```
 
-*A partir de este momento el desarrollador solo debe preocuparse de navegar entre las Branchs.*
+*A partir de este momento el desarrollador solo debe preocuparse de navegar entre las branches.*
+
+```
+PS C:\Users\jull.quintero\Documents\LocalPlatformDeployment> git checkout integration
+Switched to branch 'integration'
+Set Config
+┌────────────┬─────────┬─────────┐
+│ Name       │ Value   │ Success │
+├────────────┼─────────┼─────────┤
+│ target-org │ int_org │ true    │
+└────────────┴─────────┴─────────┘
+
+🔗 Contexto: INT_ORG activo
+```
 
 # Manifest
 No es el [Manifiesto Hacker](https://phrack.org/issues/7/3). El `package.xml` no es solo un archivo de descarga, es el alcance del despliegue partiendo del ambiente de origen(developer)
@@ -201,12 +214,50 @@ Esta instruccion retorna una lista de tipos (ej. **ApexClass**, **CustomField**,
 
 El desarrollador al saber que componentes creo o modifico, genera el manifiesto directamente haciendo uso del comando [**project generate manifest**](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_project_commands_unified.htm#cli_reference_project_generate_manifest_unified)
 
-`sf project generate manifest --metadata MetadataType:Components --name package --output-dir ./manifest`
+```
+sf project generate manifest --metadata MetadataType:Component, ..[]  --name package --output-dir ./manifest
+```
 
-**En nuestro ejemplo:** 
+**En nuestro ejemplo:** Llevaremos acabo el levantamiento del *Lightning Web Components (LWC)* llamado `LdsDeleteRecord` que hace parte de [lwc-recipes](https://github.com/trailheadapps/lwc-recipes/tree/main/force-app/main/default/lwc/contactList) en este caso no se levantara la org mediante los metadatos(Scratch ORG). El desarrollador debera llevarlo a su entorno y preparar el manifiesto. 
 
-`sf project generate manifest --metadata PermissionSet:Contact_Management_System_End_User --name package --output-dir ./manifest`
+- Metadatype Components
+    - ApexClass
+        - `AccountController.cls`
+        - `TestAccountController.cls`
+    - LightningComponentBundle(LWC)
+        - `LdsDeleteRecord`
+        - `ErrorPanel`
+        - `ViewSource`
+        - `ldsUtils`
+    - FlexiPage
+        - `Home_Page_Default2`
 
+```
+sf project generate manifest --metadata ApexClass:AccountController, ApexClass:TestAccountController, FlexiPage:Home_Page_Default2, LightningComponentBundle:errorPanel, LightningComponentBundle:ldsDeleteRecord, LightningComponentBundle:ldsUtils, LightningComponentBundle:viewSource --name package --output-dir ./manifest
+```
+**Manifiesto generado**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>AccountController</members>
+        <members>TestAccountController</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Home_Page_Default2</members>
+        <name>FlexiPage</name>
+    </types>
+    <types>
+        <members>errorPanel</members>
+        <members>ldsDeleteRecord</members>
+        <members>ldsUtils</members>
+        <members>viewSource</members>
+        <name>LightningComponentBundle</name>
+    </types>
+    <version>65.0</version>
+</Package>
+```
 
 *O por lo **contrario** el desarrollador puede usar el plugin llamado [*Salesforce Package.xml Generator Extension for VS Code*](https://marketplace.visualstudio.com/items?itemName=modicatech.apex-code-coverage-visualizer). para generarlo gráficamente.*
 
@@ -234,7 +285,6 @@ git checkout integration
 ```
 
 **CRUCIAL**: Antes de mover algo, **descarga** el estado actual de la **Org de destino** para generar un **backup**
-
 ***Pegar** el contenido del **mismo** `Package.xml`*
 
 ```
@@ -258,25 +308,53 @@ Antes de afectar el **ambiente destino(integration)**, el desarrollador debera e
 
 **Validar** en la ORG de destino:
 
-Por buenas prácticas siempre es recomendado correr los test específicos de las clases o de lo contrario los test bases de la organizacion.
+Por buenas prácticas se recomendado ejecutar *siempre*s los test específicos de las clases o de lo contrario los test bases de la organizacion.
 
 ```
-sf project deploy start -x manifest\package.xml -l RunSpecifiedTests -t "UtilTest" --dry-run
+sf project deploy start -x manifest\package.xml -l RunSpecifiedTests -t "TestAccountController" --dry-run
 ```
 
 *Al usar validate, Salesforce genera un **Job ID**. Si la validación es exitosa, ese ID permite realizar un Quick Deploy (despliegue rápido) sin volver a ejecutar los tests.*
 
+```
+ ────────── Deploying Metadata (dry-run) ──────────
+
+ Deploying (dry-run) v65.0 metadata to jull.quintero@mindful-bear-8gul7q.com using the v65.0 SOAP API.
+
+ ✔ Preparing 375ms
+ ◯ Waiting for the org to respond - Skipped
+ ✔ Deploying Metadata 1.19s
+   ▸ Components: 7/7 (100%)
+ ✔ Running Tests 874ms
+   ▸ Successful: 5/5 (100%)
+   ▸ Failed: -
+ ◯ Updating Source Tracking - Skipped
+ ✔ Done 0ms
+
+ Status: Succeeded
+ Deploy ID: 0Affj00000AiVrxCAF
+ Target Org: jull.quintero@mindful-bear-8gul7q.com
+ Elapsed Time: 2.45s
+
+Test Results Summary
+Passing: 5
+Failing: 0
+Total: 5
+Time: 608
+Dry-run complete.
+````
 ### Monitoreo y Quick Deploy
 **Monitorear** el progreso de la **validación** desde la **Org** destino: 
 
 - Setup > **Deployment Status >** Dar click sobre **View Details** y luego sobre **Quick Deploy”**
 
 **Hacer commit del merge**
-Una vez que el **despliegue es confirmado como exitoso** en la Org de destino, el desarrollador procede a cerrar el **ciclo en el control de versiones loca**l. Esto asegura que lo que está en la org de destino coincida con la estación local del desarrollador.
+Una vez que el **despliegue es confirmado como exitoso** en la Org de destino, el desarrollador procede a cerrar el **ciclo en el control de versiones local**. Esto asegura que lo que está en la org de destino coincida con la estación local del desarrollador.
 
 ```
 git commit -m "Instalado en integración"
 ```
+![](/assets/images/sfdc-local-platform-deployment/componente.png)
 
 # Puntos claves
 Esta estrategia técnica de **"puente local"** es la solución más robusta para equipos sin infraestructura de servidores. Al usar Git como un middleware de comparación, el desarrollador transformas una tarea manual y arriesgada en un proceso auditable.
@@ -294,4 +372,8 @@ Esta estrategia técnica de **"puente local"** es la solución más robusta para
 - **Resolución de Conflictos:**(especialmente para archivos cómo .profile o .permissionset que suelen ser problemáticos). Documentar esto dependiendo del proyecto. 
 
 - **Destructive Changes**: Al ser la **Org la fuente de la verdad,** si borras algo localmente y despliegas, no se borrará en la Org automáticamente. Documentar el uso del **archivo** destructiveChanges.xml para limpiezas.
+
+- **Automatización**: Este proceso puede ser automatizado localmente con un script, o corriendo jenkins en el localhost.
+
+- **Branching model**: Implementar un modelo de ramas que incluya feature branches, similar al modelo [Gitflow workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) 
 
