@@ -265,6 +265,14 @@
         </li>
       {% endif %}
 
+      {% if author.vine %}
+        <li>
+          <a href="https://www.salesforce.com/trailblazer/{{ author.trailblazer }}" itemprop="sameAs" rel="nofollow noopener noreferrer">
+            <i class="fa-brands fa-salesforce" aria-hidden="true"></i> trailblazer
+          </a>
+        </li>
+      {% endif %}
+
       {% include author-profile-custom-links.html %}
     </ul>
   </div>

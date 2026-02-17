@@ -140,16 +140,13 @@ Abra una terminal en su carpeta de trabajo y ejecute:
 sf project generate --name LocalPlatformDeployment --template empty --manifest
 code LocalPlatformDeployment
 ```
-*Se abrirá la carpeta del proyecto en el **VSC** con los directorios por defecto, Esto creará la carpeta **manifest/package.xm**l donde listamos los componentes a trabajar.*
+*Se abrirá la carpeta del proyecto en el **VSC** con los directorios por defecto, Esto creará la carpeta `manifest/package.xml` donde se listan los componentes a trabajar.*
 
-#### Configurar el `.forceignore`
-Asegúrese de que el archivo .forceignore incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore)
+El desarrollador debe segúrese de que el  `.forceignore` incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore).
 
-#### Configurar el `.gitignore`
-En caso de que no haya sido creado automáticamente, entonces crear el archivo `.gitignore` en la raíz del directorio. [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.gitignore)
+En caso de que el `.gitignore` *no haya sido creado automáticamente*, entonces crear en la raíz del directorio. [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.gitignore).
 
-#### **Crear** el árbol de ramas (Pipeline Local)
-Dentro de la carpeta del proyecto:
+**Crear** el árbol de ramas (Pipeline Local) del proyecto:
 
 ```
 git init
