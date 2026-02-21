@@ -23,7 +23,7 @@ Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotar
 
 Iniciamos con una fase de reconocimiento activo utilizando nmap para identificar la superficie de ataque. El objetivo es descubrir servicios en ejecución y versiones específicas que puedan presentar debilidades.
 
-#### 1.1 Escaneo de todos los puertos (Full Port Scan)
+### 1.1 Escaneo de todos los puertos (Full Port Scan)
 Ejecutamos un escaneo inicial sobre el rango completo de puertos TCP (1-65535) para asegurar que no pasamos por alto ningún servicio oculto en puertos no estándar.
 ```
 nmap -p- -vvv --min-rate 5000 10.129.242.164
@@ -43,7 +43,7 @@ PORT      STATE  SERVICE          REASON
 22/tcp    open   ssh              syn-ack
 8000/tcp  open   http-alt         syn-ack ttl 63
 ```
-#### 1.2 Detección de Servicios y Versiones
+### 1.2 Detección de Servicios y Versiones
 Una vez identificados los puertos abiertos, realizamos un escaneo más profundo utilizando los flags -sC (scripts por defecto) y -sV (detección de versiones).
 
 ```
@@ -61,7 +61,7 @@ PORT     STATE SERVICE  VERSION
 |_http-server-header: Werkzeug/3.1.3 Python/3.12.7
 ```
 
-#### 1.3 Configuración del Virtual Host
+### 1.3 Configuración del Virtual Host
 
 Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio imagery.htb. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
 
