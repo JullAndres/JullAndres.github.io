@@ -15,6 +15,7 @@ tags:
   - linux
   - XSS
   - LFI
+  - RCE
 ---
 
 Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador. Por medio de la función de obtener los logs filtraremos in local file inclusion para obtener el código fuente de la aplicación donde finalmente haremos una inyección de comandos en la función que transforma o edita las imágenes.
@@ -207,14 +208,14 @@ app_core.config['SESSION_COOKIE_HTTPONLY'] = False
 
 La aplicación importa módulos específicos para cada función. Basándonos en nuestra hoja de ruta inicial:
 
-- config.py
-- utils.py
-- api_auth.py
-- api_upload.py
-- api_manage.py
-- api_edit.py
-- api_admin.py
-- api_misc.py
+- `config.py`
+- `utils.py`
+- `api_auth.py`
+- `api_upload.py`
+- `api_manage.py`
+- `api_edit.py`
+- `api_admin.py`
+- `api_misc.py`
 
 Continuamos extrayendo archivos críticos definidos en los imports y en `config.py`:
 
@@ -401,8 +402,6 @@ Utilizamos los hashes MD5 obtenidos previamente del archivo `db.json` y procedem
 
 ```
 hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt
-
-2c65c8d7bfbca32a3ed42596192384f6:iambatman
 ```
 
 - **Password**: iambatman
