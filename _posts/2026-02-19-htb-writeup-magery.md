@@ -1,7 +1,7 @@
 ---
 layout: single
 title: Imagery - Hack The Box
-excerpt: "Imagery es una máquina de dificultad Medium que aloja una galería de imágenes basada en Flask. La intrusión comienza explotando una vulnerabilidad de Stored XSS en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de Local File Inclusion (LFI) en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una Inyección de Comandos (RCE) en el módulo de edición de imágenes para obtener ejecución remota en el servidor."
+excerpt: "Imagery es una máquina de dificultad Medium que aloja una galería de imágenes basada en Flask. La intrusión comienza explotando una vulnerabilidad de Stored XSS en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de Local File Inclusion (LFI) en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una Inyección de Comandos (RCE) en el módulo de edición de imágenes para obtener ejecución remota al servidor."
 date: 2026-02-25
 classes: wide
 header:
@@ -25,9 +25,10 @@ tags:
 
 # About
 
-**Imagery** es una máquina de dificultad **Medium** que aloja una galería de imágenes basada en **Flask**. La intrusión comienza explotando una vulnerabilidad de **Stored XSS** en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de **Local File Inclusion (LFI)** en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una **Inyección de Comandos (RCE)** en el módulo de edición de imágenes para obtener ejecución remota en el servidor.
+**Imagery** es una máquina de dificultad **Medium** que aloja una galería de imágenes basada en **Flask**. La intrusión comienza explotando una vulnerabilidad de **Stored XSS** en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de **Local File Inclusion (LFI)** en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una **Inyección de Comandos (RCE)** en el módulo de edición de imágenes para obtener ejecución remota al servidor.
 
 # Contents
+
 - [1. Enumeration](#1-enumeration)
     - [1.1 Full Port Scan](#11-full-port-scan)
     - [1.2 Service/Version Detention](#12-serviceversion-detention)
