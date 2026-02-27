@@ -30,6 +30,20 @@ Para esta PoC, Utilizaremos el mecanismo de **External ID** para desacoplar la c
 - **Mecanismo de Ingesta**:  El cliente envía el archivo completo a un endpoint de carga; el servidor lo encola y procesa en **paralelo** según disponibilidad de recursos.
 - **Orden**: **No determinista.** No se garantiza que los registros se procesen en el mismo orden que el archivo CSV.
 
+
+# Contents
+
+- [1. Environment Setup](#1-environment-setup)
+    - [1.1 Org Connectivity Validation](#11-org-connectivity-validation)
+    - [1.2 Metadata Mapping & Schema](#12-metadata-mapping--schema)
+- [2. Execution Flow ](#2-execution-flow)
+    - [2.1  Job Submission & Execution](#21--job-submission--execution)
+    - [2.2 Job Monitoring](#22-job-monitoring)
+    - [2.3 Outcome Analysis & Result Retrieval](#23-outcome-analysis--result-retrieval)
+      - [2.3.1 Programmatic Retrieval (CLI)](#231-programmatic-retrieval-cli)
+      - [2.3.2 Visual Monitoring (Salesforce UI)](#232-visual-monitoring-salesforce-ui)
+- [3. Operational Governance & Limits](#3-operational-governance--limits)
+
 # 1. Environment Setup
 
 ## 1.1 Org Connectivity Validation
@@ -105,7 +119,7 @@ Como alternativa de inspección rápida, Salesforce ofrece una consola de admini
 
 *Tanto los resultados en la CLI como en la interfaz de usuario tienen una ventana de persistencia de **7 días**. Tras este periodo, los metadatos del Job y sus resultados detallados son **eliminados permanentemente** de los servidores de Salesforce.*
 
-# 4. Operational Governance & Limits
+# 3. Operational Governance & Limits
 
 - **Volumen**: Máximo 150 millones de registros por periodo de 24 horas.
 - **Payload**: El archivo CSV no debe exceder los 150 MB (sin comprimir).
