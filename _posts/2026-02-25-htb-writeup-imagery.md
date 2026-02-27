@@ -1,7 +1,7 @@
 ---
 layout: single
 title: Imagery - Hack The Box
-excerpt: "Imagery es una máquina de dificultad Medium que aloja una galería de imágenes basada en Flask. La intrusión comienza explotando una vulnerabilidad de Stored XSS en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso..
+excerpt: "Imagery es una máquina de dificultad Medium que aloja una galería de imágenes basada en Flask. La intrusión comienza explotando una vulnerabilidad de Stored XSS en el sistema de reporte de errores, lo que nos permitirá secuestrar la cookie de sesión del administrador. Tras obtener acceso.."
 date: 2026-02-25
 classes: wide
 header:
