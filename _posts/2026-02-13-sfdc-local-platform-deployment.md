@@ -9,18 +9,18 @@ header:
   teaser_home_page: true
   icon: /assets/images/salesforce.png
 categories:
-  - Salesforce
-  - DevOps
+  - salesforce
+  - devops
 tags:
-  - SF
-  - Visual Studio Code 
-  - GIT
-  - Salesforce Extension Pack (Expanded)
-  - Salesforce Platform
-  - Salesforce DX
-  - Salesforce Code Analyze
-  - Apex PMD
-  - ESLint
+  - sf
+  - visual studio code 
+  - git
+  - salesforce extension pack
+  - salesforce platform
+  - salesforce dx
+  - salesforce code analyze
+  - apex pmd
+  - eslint
 ---
 
 Actualmente, un proyecto puede carecer de una infraestructura de **DevOps** automatizada (**CI/CD**) y repositorios remotos. Esto genera riesgos de sobreescritura de código, pérdida de cambios y una falta de visibilidad sobre lo que se despliega entre los ambientes de **Desarrollo**, **Integración**, **UAT**, etc.
