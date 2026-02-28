@@ -2,7 +2,7 @@
 layout: single
 title: Developer Experience(DX). High-Volume Data Ingestion via Bulk API 2.0 - Salesforce
 excerpt: "La Bulk API 2.0 representa la evolución de la carga masiva en Salesforce, diseñada para maximizar el rendimiento y simplificar la experiencia del desarrollador. A diferencia de las APIs basadas en REST o SOAP tradicionales, Bulk 2.0 utiliza un modelo de procesamiento asíncrono optimizado para datasets de millones de registros."
-date: 2026-02-25
+date: 2026-02-27
 classes: wide
 header:
   teaser: /assets/images/sfdc-dx-bulk-api/logo.webp
