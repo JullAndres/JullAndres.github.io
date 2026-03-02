@@ -108,14 +108,14 @@ Aunque no tengamos un servidor remoto (como GitHub), usaremos **Git** localmente
     ```
 
 ## 1.4 Crear Playgrounds
-Como estamos en un enfoque de **Org-Centric**, utilizaremos las **Trailhead Playgrounds** o **Developer Editions** gratuitas, que funcionan exactamente igual que un entorno de producción o sandbox para fines de despliegue.
+Como estamos en un enfoque de **Org-Centric**, utilizamos las **Trailhead Playgrounds** o **Developer Editions** gratuitas, que funcionan exactamente igual que un entorno de producción o sandbox para fines de despliegue.
 
-Tienes dos opciones rápidas:
+Tenemos dos opciones rápidas:
 
 1. **Recomendada:** ir a [trailhead](https://trailhead.salesforce.com/) > Hands-On Orgs > Click en Create Playground
    - Crear dos playground llamadas **Developer** e **Integration**.
    
-2. Ve a [developer.salesforce.com](https://developer.salesforce.com) y crea dos cuentas con correos diferentes (ej: tu_nombre+dev@gmail.com y tu_nombre+int@gmail.com).
+2. En [developer.salesforce.com](https://developer.salesforce.com) y creamos dos cuentas con correos diferentes.
 
 *Asegúrate de tener el **Username** y **Password** de ambas. En Playgrounds de Trailhead, puedes obtener la contraseña usando el botón **"Get Your Login Credentials**" dentro de la aplicación **"Playground Starter".***
 
@@ -127,7 +127,7 @@ Para el Ambiente de **Origen (Developer)**:
 sf org login web --alias dev_org --instance-url https://MyDomainDeveloperName.my.salesforce.com --set-default
 ```
 
-*Se abrirá el navegador. Ingresa las credenciales de tu primera Org.*
+*Se abrirá el navegador. Ingresa las credenciales.*
 
 Para el Ambiente de **Destino (Integration)**:
 
@@ -135,7 +135,7 @@ Para el Ambiente de **Destino (Integration)**:
 sf org login web --alias int_org --instance-url https://MyDomainIntegrationName.my.salesforce.com
 ```
 
-*Ingresa las credenciales de tu segunda Org.*
+*Ingresa las credenciales.*
 
 Para **listar** las organizaciones autenticadas:
 
@@ -143,7 +143,7 @@ Para **listar** las organizaciones autenticadas:
  sf org list
  ```
 
-En un entorno corporativo real, la **dev_org** sería tu **Developer Sandbox** y la **int_org** sería la **Partial** o **Full Copy Sandbox**. Para esta PoC, las Playgrounds simularán este comportamiento perfectamente, permitiéndote mover metadatos de una a otra sin restricciones.
+En un entorno corporativo real, la **dev_org** sería nuestra **Developer Sandbox** y la **int_org** sería la **Partial** o **Full Copy Sandbox**. Para esta PoC, las Playgrounds simularán este comportamiento perfectamente, permitiéndote mover metadatos de una a otra sin restricciones.
 
 ***En caso de tener errores visitar => [Resolve Common Authorization Errors](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_troubleshoot_auth_errors.htm)***
 
@@ -162,7 +162,7 @@ code LocalPlatformDeployment
 ```
 *Se abrirá la carpeta del proyecto en el **VSC** con los directorios por defecto, Esto creará la carpeta `manifest/package.xml` donde se listan los componentes a trabajar.*
 
-El desarrollador debe segúrese de que el  `.forceignore` incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore).
+El desarrollador debe asegúrese de que el  `.forceignore` incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore).
 
 En caso de que el `.gitignore` *no haya sido creado automáticamente*, entonces crear en la raíz del directorio. [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.gitignore).
 
@@ -178,17 +178,18 @@ git branch developer
 
 ### 1.5.2 Git Hooks
 
-Para evitar hacer **retrieve,** **deploy, etc** en un ambiente incorrecto, implementaremos un "**conmutador**" automático. Para que al cambiar de branch el ***target-org*** del archivo **.sf/config.json** apunte automáticamente a la ORG correspondiente.
+Para evitar hacer **retrieve,** o **deploy** en un ambiente incorrecto, implementaremos un "**conmutador**" automático. Para que al cambiar de branch el ***target-org*** del archivo **.sf/config.json** apunte automáticamente a la ORG correspondiente.
 
-**Crear** el automatizador, en la terminar del projecto ejecuta:
+**Crea** el automatizador, en la terminal del proyecto ejecuta:
 
 ```
 code .git/hooks/post-checkout
 ```
 
-Se abrirá el archivo post-checkout
+Se abrirá el archivo `post-checkout`
 
 Paga este código que vincula la branch con la Org:
+
 ```bash
 #!/bin/bash
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -222,25 +223,25 @@ Set Config
 
 # 2. Manifest
 
-No es el [Manifiesto Hacker](https://phrack.org/issues/7/3). El `package.xml` no es solo un archivo de descarga, es el alcance del despliegue partiendo del ambiente de origen(developer)
+No es el [Manifiesto Hacker](https://phrack.org/issues/7/3). Una vez que se han probado los cambios, el desarrollador debe crear un archivo de manifiesto llamado `package.xml`. Es un artefacto de entrega (release artifact) que enumera todos los componentes que deben implementarse en la organización de destino.
 
 ## 2.1 Metadata Types
 
-Antes de crear el archivo, el desarrollador debe saber qué **[tipos de metadatos](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen (ej. **ApexClass**, **CustomField**, **Layout**). Esto te confirma cómo escribir el nombre del tipo correctamente en el XML
+Antes de crear el archivo, el desarrollador debe saber qué **[tipos de metadatos](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen (ej. **ApexClass**, **CustomField**, **Layout**). Esto confirma cómo escribir el nombre del tipo correctamente en el XML
 
 ```
 sf org list metadata-types
 ```
 
-## 2,2 Generar package.xml
+## 2.2 Generar package.xml
 
-El desarrollador al saber que componentes creo o modifico, genera el manifiesto directamente haciendo uso del comando [**project generate manifest**](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_project_commands_unified.htm#cli_reference_project_generate_manifest_unified)
+El desarrollador al saber que componentes creo o modifico, genera el manifiesto directamente haciendo uso del comando [**project generate manifest.**](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_project_commands_unified.htm#cli_reference_project_generate_manifest_unified)
 
 ```
 sf project generate manifest --metadata MetadataType:Component, ..[]  --name package --output-dir ./manifest
 ```
 
-**En nuestro ejemplo:** Llevaremos acabo el levantamiento del *Lightning Web Components (LWC)* llamado `LdsDeleteRecord` que hace parte de [lwc-recipes](https://github.com/trailheadapps/lwc-recipes/tree/main/force-app/main/default/lwc/contactList) en este caso no se levantara la org mediante los metadatos(Scratch ORG). El desarrollador debera llevarlo a su entorno y preparar el manifiesto. 
+**En nuestro ejemplo:** Llevaremos a cabo el levantamiento del *Lightning Web Components (LWC)* llamado `LdsDeleteRecord` que hace parte del [lwc-recipes](https://github.com/trailheadapps/lwc-recipes/tree/main/force-app/main/default/lwc/contactList), en este caso no se levantara la org mediante los metadatos(Scratch ORG). El desarrollador deberá llevarlo a su entorno y preparar el manifiesto. 
 
 - Metadatype Components
     - ApexClass
@@ -292,13 +293,15 @@ Este es el proceso **cíclico** para mover cambios de un ambiente a otro, garant
 
 ## 3.1 Extracción (Origen vs Destino)
 
-**Cambiar** al Branch **developer** ORG y **hacer** retrieve.
+**Cambiar** al Branch **developer** ORG y **hacer** retrieve:
+
 ```
 git checkout developer
 sf project retrieve start -x manifest\package.xml
 ```
 
-**Crear** commit del desarrollo
+**Crear** commit del desarrollo:
+
 ```
 git add .
 git commit -m "cambios listos para integración"
@@ -306,13 +309,15 @@ git commit -m "cambios listos para integración"
 
 *Antes de **cambiar** de branch. **Copiar** el contenido del `Package.xml`*
 
-**Cambiar** al Branch **integration** ORG
+**Cambiar** al Branch **integration** ORG:
+
 ```
 git checkout integration
 ```
 
 **CRUCIAL**: Antes de mover algo, **descarga** el estado actual de la **Org de destino** para generar un **backup**
-***Pegar** el contenido del **mismo** `Package.xml`*
+
+***Pegar** el contenido del **mismo** `Package.xml`*:
 
 ```
 sf project retrieve start -x manifest\package.xml
@@ -321,23 +326,22 @@ git commit -m "backup: estado previo de Integración antes del merge"
 ```
 
 **Ejecutar** el merge y resolver los conflictos. Aquí es donde este **proceso local** brilla sobre los **Change Sets**. Al ejecutar:
+
 ```
 git merge --no-commit --no-ff developer
 ```
 
-**Resolución Visual:** VS Code marcará en rojo/azul las colisiones (ej. si otro desarrollador modificó el mismo Layout en Integración). Puedes elegir "Accept Both" para fusionar cambios de ambos sin borrar el trabajo ajeno.
+**Resolución de conflictos:** VS Code marcará en rojo/azul las colisiones (ej. si otro desarrollador modificó el mismo Layout en Integración). Puedes elegir "Accept Both" para fusionar cambios de ambos sin borrar el trabajo ajeno.
 
 ## 3.2 Validación y Despliegue
 
-Una vez resuelto los conflictos en local, la carpeta `force-app` contiene el "**Código Final Fusionado".**  la **"Versión Única de la Verdad**". El objetivo ahora es asegurar que esta versión sea compatible con la **Org de destino** sin romper funcionalidades existentes.
+Una vez resuelto los conflictos en local, la carpeta `force-app` contendrá el "**Código Final Fusionado".**  la **"Versión Única de la Verdad**". El objetivo ahora es asegurar que esta versión sea compatible con la **Org de destino** sin romper funcionalidades existentes.
 
 ### 3.2.1 Validación Técnica (Dry-Run)
 
-Antes de afectar el **ambiente destino(integration)**, el desarrollador debera ejecutar una **validación**. Usaremos el flag `--dry-run` para **simular el despliegue** y `-l RunSpecifiedTests` para garantizar que la cobertura de código es correcta.
+Antes de afectar el **ambiente destino(integration)**, el desarrollador deberá ejecutar una **validación** en la misma. Usando la flag `--dry-run` para **simular el despliegue** y `-l RunSpecifiedTests` para garantizar que la cobertura de código es correcta.
 
-**Validar** en la ORG de destino:
-
-Por buenas prácticas se recomendado ejecutar *siempre*s los test específicos de las clases o de lo contrario los test bases de la organizacion.
+Por buenas prácticas se recomendado ejecutar *siempre* los test específicos de las clases o de lo contrario los test bases de la organizacion:
 
 ```
 sf project deploy start -x manifest\package.xml -l RunSpecifiedTests -t "TestAccountController" --dry-run
@@ -372,35 +376,36 @@ Total: 5
 Time: 608
 Dry-run complete.
 ````
+
 ### 3.2.2 Monitoreo y Quick Deploy
 
 **Monitorear** el progreso de la **validación** desde la **Org** destino: 
 
 - Setup > **Deployment Status >** Dar click sobre **View Details** y luego sobre **Quick Deploy”**
 
-**Hacer commit del merge**
-Una vez que el **despliegue es confirmado como exitoso** en la Org de destino, el desarrollador procede a cerrar el **ciclo en el control de versiones local**. Esto asegura que lo que está en la org de destino coincida con la estación local del desarrollador.
+Una vez que el **despliegue es confirmado como exitoso** en la Org de destino, el desarrollador procede a cerrar el **ciclo en el control de versiones local**. Esto asegura que lo que está en la org de destino coincida con la estación local del desarrollador:
 
 ```
 git commit -m "Instalado en integración"
 ```
+
 ![](/assets/images/sfdc-local-platform-deployment/componente.png)
 
 # 4. Puntos claves
 
-Esta estrategia técnica de **"puente local"** es la solución más robusta para equipos sin infraestructura de servidores. Al usar Git como un middleware de comparación, el desarrollador transformas una tarea manual y arriesgada en un proceso auditable.
+Esta estrategia técnica de **"puente local"** es la solución más robusta para equipos sin infraestructura de servidores. Al usar Git como un **middleware** de comparación, el desarrollador transforma una tarea manual y arriesgada en un proceso auditable.
 
 ## 4.1 Beneficios
 
 - **Independencia de Infraestructura**: No requiere servidores de Jenkins ni licencias de herramientas pagas.
 
-- **Trazabilidad:** Cada cambio en la Org de Integración tiene un commit de Git asociado.
+- **Trazabilidad**: Cada cambio en la Org de Integración tiene un commit de Git asociado.
 
 - **Curva de Aprendizaje**: Prepara al equipo para cuando se implemente **una herramienta formal** como Salesforce DevOps Center, GitHub Actions, Copado, Jenkins, etc.
 
 - **Git como Árbitro:** Aunque no haya repositorio remoto (GitHub/GitLab), Git local nos permite hacer Rollbacks rápidos. Si el despliegue a Integración falla, puedes volver a tu estado anterior.
 
-## 4.2 Recomendación
+## 4.2 Recomendaciones
 
 - **Resolución de Conflictos:**(especialmente para archivos cómo .profile o .permissionset que suelen ser problemáticos). Documentar esto dependiendo del proyecto. 
 
