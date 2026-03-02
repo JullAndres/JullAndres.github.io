@@ -36,23 +36,40 @@ En este modelo, la **Org de Salesforce se mantiene como la "Fuente de la Verdad"
 La **PoC** documentará los pasos técnicos para **extraer metadatos** desde una **Org origen**, realizar un **control de cambios** mediante commits de **Git** locales y **ejecutar el despliegue** hacia una **Org destino** de forma **segura y validada**, todo desde la **estación de trabajo del desarrollador**.
 
 # Contenido
-- [Pre-Work](#pre-work)
-- [Manifest](#manifest)
-- [Commit & Recursive Merge & Deployment](#commit--recursive-merge--deployment)
-- [Puntos Claves](#puntos-claves)
+- [1. Pre-Work](#1-pre-work)
+    - [1.2 Salesforce Developer Experience (DX)](#12-salesforce-developer-experience-dx)
+        - [1.2.1 Salesforce CLI (sf v2)](#121-salesforce-cli-sf-v2)
+        - [1.2.2 Visual Studio Code + Salesforce Extension Pack](#122-visual-studio-code--salesforce-extension-pack)
+        - [1.2.3 Salesforce Code Analyzer (Opcional](#123-salesforce-code-analyzer-opcional)
+    - [1.3 Source Control System](#13-source-control-system)
+    - [1.4 Crear Playgrounds](#14-crear-playgrounds)
+    - [1.5 Preparación del Proyecto Local](#15-preparación-del-proyecto-local)
+        - [1.5.1 Crear el proyecto DX](#151-crear-el-proyecto-dx)
+        - [1.5.2 Git Hooks](#152-git-hooks)
+- [2. Manifest](#2-manifest)
+    - [2.1 Metadata Types](#21-metadata-types)
+    - [2,2 Generar package.xml](#22-generar-packagexml)
+- [3. Commit & Recursive Merge & Deployment](#3-commit--recursive-merge--deployment)
+    - [3.1 Extracción (Origen vs Destino)](#31-extracción-origen-vs-destino)
+    - [3.2 Validación y Despliegue](#32-validación-y-despliegue)
+        - [3.2.1 Validación Técnica (Dry-Run)](#321-validación-técnica-dry-run)
+        - [3.2.2 Monitoreo y Quick Deploy](#322-monitoreo-y-quick-deploy)
+- [4. Puntos claves](#4-puntos-claves)
+    - [4.1 Beneficios](#41-beneficios)
+    - [4.2 Recomendación](#42-recomendación)
 
-# Pre-Work
+# 1. Pre-Work
 
-## Salesforce Developer Experience (DX)
+## 1.2 Salesforce Developer Experience (DX)
 Para ejecutar el flujo de la PoC, cada estación de trabajo debe contar con el siguiente stack de herramientas configurado.
 
-### Salesforce CLI (sf v2)
+### 1.2.1 Salesforce CLI (sf v2)
 Es el motor que permite la comunicación entre tu computadora y las Orgs de Salesforce.
 
 - **Instalar Salesforce CLI**
 - **Verificación:** Ejecuta `sf --version` en la terminal. Debe mostrar la versión 2.x o superior.
 
-### Visual Studio Code + Salesforce Extension Pack
+### 1.2.2 Visual Studio Code + Salesforce Extension Pack
 El IDE oficial para el desarrollo en la plataforma.
 
 - [Instalar Visual studio code](https://code.visualstudio.com/) 
@@ -64,7 +81,7 @@ El IDE oficial para el desarrollo en la plataforma.
     - [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
     - [Git History](https://marketplace.visualstudio.com/items?itemName=donjayamanne.githistory)
 
-### Salesforce Code Analyzer (Opcional)
+### 1.2.3 Salesforce Code Analyzer (Opcional)
 Para asegurar que el código extraído de la Org cumple con las mejores prácticas antes de ser movido a Integración:
 
 - **Instalar Salesforce Code Analyzer**
@@ -79,7 +96,7 @@ Para asegurar que el código extraído de la Org cumple con las mejores práctic
     sf code-analyzer rules
     ```
 
-## Source Control System
+## 1.3 Source Control System
 Aunque no tengamos un servidor remoto (como GitHub), usaremos **Git** localmente para crear "puntos de control" y comparar archivos.
 
 - [Instalar GIT SCM](https://git-scm.com/install/)
@@ -90,7 +107,7 @@ Aunque no tengamos un servidor remoto (como GitHub), usaremos **Git** localmente
     git config list
     ```
 
-## Crear Playgrounds
+## 1.4 Crear Playgrounds
 Como estamos en un enfoque de **Org-Centric**, utilizaremos las **Trailhead Playgrounds** o **Developer Editions** gratuitas, que funcionan exactamente igual que un entorno de producción o sandbox para fines de despliegue.
 
 Tienes dos opciones rápidas:
@@ -100,12 +117,11 @@ Tienes dos opciones rápidas:
    
 2. Ve a [developer.salesforce.com](https://developer.salesforce.com) y crea dos cuentas con correos diferentes (ej: tu_nombre+dev@gmail.com y tu_nombre+int@gmail.com).
 
-### Identificación de Credenciales
-Asegúrate de tener el **Username** y **Password** de ambas. En Playgrounds de Trailhead, puedes obtener la contraseña usando el botón **"Get Your Login Credentials**" dentro de la aplicación **"Playground Starter".**
+*Asegúrate de tener el **Username** y **Password** de ambas. En Playgrounds de Trailhead, puedes obtener la contraseña usando el botón **"Get Your Login Credentials**" dentro de la aplicación **"Playground Starter".***
 
-### Vinculación al Entorno Local (CLI Authentication)
+**Vinculación al Entorno Local (CLI Authentication)**
 
-#### Para el Ambiente de **Origen (Developer):**
+Para el Ambiente de **Origen (Developer)**:
 
 ```
 sf org login web --alias dev_org --instance-url https://MyDomainDeveloperName.my.salesforce.com --set-default
@@ -113,7 +129,7 @@ sf org login web --alias dev_org --instance-url https://MyDomainDeveloperName.my
 
 *Se abrirá el navegador. Ingresa las credenciales de tu primera Org.*
 
-#### Para el Ambiente de **Destino (Integration):**
+Para el Ambiente de **Destino (Integration)**:
 
 ```
 sf org login web --alias int_org --instance-url https://MyDomainIntegrationName.my.salesforce.com
@@ -121,19 +137,23 @@ sf org login web --alias int_org --instance-url https://MyDomainIntegrationName.
 
 *Ingresa las credenciales de tu segunda Org.*
 
-**Para listar las organizaciones autenticadas:** ``sf org list``
+Para **listar** las organizaciones autenticadas:
+
+ ```
+ sf org list
+ ```
 
 En un entorno corporativo real, la **dev_org** sería tu **Developer Sandbox** y la **int_org** sería la **Partial** o **Full Copy Sandbox**. Para esta PoC, las Playgrounds simularán este comportamiento perfectamente, permitiéndote mover metadatos de una a otra sin restricciones.
 
 ***En caso de tener errores visitar => [Resolve Common Authorization Errors](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_troubleshoot_auth_errors.htm)***
 
 
-## Preparación del Proyecto Local
+## 1.5 Preparación del Proyecto Local
 Antes de iniciar el flujo, el desarrollador debe preparar su área de trabajo una sola vez.
 
 Utilizando el formato de fuente estándar de Salesforce DX, pero basado en un archivo `package.xml` (manifiesto) para tener control total sobre qué metadatos se mueven.
 
-### Crear el proyecto DX
+### 1.5.1 Crear el proyecto DX
 Abra una terminal en su carpeta de trabajo y ejecute:
 
 ```
@@ -156,7 +176,8 @@ git branch integration
 git branch developer
 ```
 
-### Git Hooks
+### 1.5.2 Git Hooks
+
 Para evitar hacer **retrieve,** **deploy, etc** en un ambiente incorrecto, implementaremos un "**conmutador**" automático. Para que al cambiar de branch el ***target-org*** del archivo **.sf/config.json** apunte automáticamente a la ORG correspondiente.
 
 **Crear** el automatizador, en la terminar del projecto ejecuta:
@@ -199,15 +220,19 @@ Set Config
 🔗 Contexto: INT_ORG activo
 ```
 
-# Manifest
+# 2. Manifest
+
 No es el [Manifiesto Hacker](https://phrack.org/issues/7/3). El `package.xml` no es solo un archivo de descarga, es el alcance del despliegue partiendo del ambiente de origen(developer)
 
-## Generar el `package.xml`
-En un flujo profesional, no movemos "todo" sino sólo lo que hemos construido. El `package.xml` define este alcance.
+## 2.1 Metadata Types
 
-**Identificar qué metadatos existen:** Antes de crear el archivo, el desarrollador debe saber qué **[tipos de metadatos](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen. `sf org list metadata-types`
+Antes de crear el archivo, el desarrollador debe saber qué **[tipos de metadatos](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_types_list.htm)** están disponibles en la Org de origen (ej. **ApexClass**, **CustomField**, **Layout**). Esto te confirma cómo escribir el nombre del tipo correctamente en el XML
 
-Esta instruccion retorna una lista de tipos (ej. **ApexClass**, **CustomField**, **Layout**). Esto te confirma cómo escribir el nombre del tipo correctamente en el XML
+```
+sf org list metadata-types
+```
+
+## 2,2 Generar package.xml
 
 El desarrollador al saber que componentes creo o modifico, genera el manifiesto directamente haciendo uso del comando [**project generate manifest**](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_project_commands_unified.htm#cli_reference_project_generate_manifest_unified)
 
@@ -229,10 +254,13 @@ sf project generate manifest --metadata MetadataType:Component, ..[]  --name pac
     - FlexiPage
         - `Home_Page_Default2`
 
+
 ```
 sf project generate manifest --metadata ApexClass:AccountController, ApexClass:TestAccountController, FlexiPage:Home_Page_Default2, LightningComponentBundle:errorPanel, LightningComponentBundle:ldsDeleteRecord, LightningComponentBundle:ldsUtils, LightningComponentBundle:viewSource --name package --output-dir ./manifest
 ```
+
 **Manifiesto generado**
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
@@ -258,10 +286,12 @@ sf project generate manifest --metadata ApexClass:AccountController, ApexClass:T
 
 *O por lo **contrario** el desarrollador puede usar el plugin llamado [*Salesforce Package.xml Generator Extension for VS Code*](https://marketplace.visualstudio.com/items?itemName=modicatech.apex-code-coverage-visualizer). para generarlo gráficamente.*
 
-# Commit & Recursive Merge & Deployment
+# 3. Commit & Recursive Merge & Deployment
+
 Este es el proceso **cíclico** para mover cambios de un ambiente a otro, garantizando que el desarrollador siempre tenga un respaldo antes de aplicar cambios.
 
-## Extracción (Origen vs Destino)
+## 3.1 Extracción (Origen vs Destino)
+
 **Cambiar** al Branch **developer** ORG y **hacer** retrieve.
 ```
 git checkout developer
@@ -297,10 +327,12 @@ git merge --no-commit --no-ff developer
 
 **Resolución Visual:** VS Code marcará en rojo/azul las colisiones (ej. si otro desarrollador modificó el mismo Layout en Integración). Puedes elegir "Accept Both" para fusionar cambios de ambos sin borrar el trabajo ajeno.
 
-## Validación y Despliegue
+## 3.2 Validación y Despliegue
+
 Una vez resuelto los conflictos en local, la carpeta `force-app` contiene el "**Código Final Fusionado".**  la **"Versión Única de la Verdad**". El objetivo ahora es asegurar que esta versión sea compatible con la **Org de destino** sin romper funcionalidades existentes.
 
-### Validación Técnica (Dry-Run)
+### 3.2.1 Validación Técnica (Dry-Run)
+
 Antes de afectar el **ambiente destino(integration)**, el desarrollador debera ejecutar una **validación**. Usaremos el flag `--dry-run` para **simular el despliegue** y `-l RunSpecifiedTests` para garantizar que la cobertura de código es correcta.
 
 **Validar** en la ORG de destino:
@@ -340,7 +372,7 @@ Total: 5
 Time: 608
 Dry-run complete.
 ````
-### Monitoreo y Quick Deploy
+### 3.2.2 Monitoreo y Quick Deploy
 
 **Monitorear** el progreso de la **validación** desde la **Org** destino: 
 
@@ -354,10 +386,12 @@ git commit -m "Instalado en integración"
 ```
 ![](/assets/images/sfdc-local-platform-deployment/componente.png)
 
-# Puntos claves
+# 4. Puntos claves
+
 Esta estrategia técnica de **"puente local"** es la solución más robusta para equipos sin infraestructura de servidores. Al usar Git como un middleware de comparación, el desarrollador transformas una tarea manual y arriesgada en un proceso auditable.
 
-## Beneficios
+## 4.1 Beneficios
+
 - **Independencia de Infraestructura**: No requiere servidores de Jenkins ni licencias de herramientas pagas.
 
 - **Trazabilidad:** Cada cambio en la Org de Integración tiene un commit de Git asociado.
@@ -366,7 +400,8 @@ Esta estrategia técnica de **"puente local"** es la solución más robusta para
 
 - **Git como Árbitro:** Aunque no haya repositorio remoto (GitHub/GitLab), Git local nos permite hacer Rollbacks rápidos. Si el despliegue a Integración falla, puedes volver a tu estado anterior.
 
-## Recomendación
+## 4.2 Recomendación
+
 - **Resolución de Conflictos:**(especialmente para archivos cómo .profile o .permissionset que suelen ser problemáticos). Documentar esto dependiendo del proyecto. 
 
 - **Destructive Changes**: Al ser la **Org la fuente de la verdad,** si borras algo localmente y despliegas, no se borrará en la Org automáticamente. Documentar el uso del **archivo** destructiveChanges.xml para limpiezas.
@@ -374,4 +409,3 @@ Esta estrategia técnica de **"puente local"** es la solución más robusta para
 - **Automatización**: Este proceso puede ser automatizado localmente con un script, o corriendo jenkins en el localhost.
 
 - **Branching model**: Implementar un modelo de ramas que incluya feature branches, similar al modelo [Gitflow workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) 
-
