@@ -162,7 +162,7 @@ code LocalPlatformDeployment
 ```
 *Se abrirá la carpeta del proyecto en el **VSC** con los directorios por defecto, Esto creará la carpeta `manifest/package.xml` donde se listan los componentes a trabajar.*
 
-El desarrollador debe asegúrese de que el  `.forceignore` incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore).
+El desarrollador debe asegurarse de que el  `.forceignore` incluya archivos que no deben viajar a la Org (como configuraciones de VS Code o archivos del sistema). [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.forceignore).
 
 En caso de que el `.gitignore` *no haya sido creado automáticamente*, entonces crear en la raíz del directorio. [Ejemplo](https://github.com/trailheadapps/apex-recipes/blob/main/.gitignore).
 

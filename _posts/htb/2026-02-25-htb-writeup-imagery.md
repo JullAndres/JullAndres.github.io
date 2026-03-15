@@ -42,7 +42,7 @@ tags:
     - [2.3 Remote Code Execution(RCE)](#23-remote-code-executionrce)
          - [2.3.1 Users Hashes](#231-users-hashes)
          - [2.3.2 Web Shell](#232-web-shell)
-- [3. Post Explotacion](#3-post-explotacion)
+- [3. Post Exploitation](#3-post-exploitation)
     - [3.1 Enumeration](#31-enumeration)
     - [3.2 Cracking AES Encryption](#32-cracking-aes-encryption)
         - [3.2.1 Users hashes](#321-users-hashes)
@@ -99,7 +99,7 @@ PORT     STATE SERVICE  VERSION
 
 Dado que el servidor web puede estar configurado para responder a un nombre de dominio específico, es necesario mapear la dirección IP de la instancia al nombre de dominio **imagery.htb**. Esto permite que el navegador (o herramientas como curl) envíe el encabezado HTTP Host correcto.
 
-Modificamos el archivo `/etc/hosts` de nuestra maquina local:
+Modificamos el archivo `/etc/hosts` de nuestra máquina local:
 
 ```
 echo "10.129.243.164 imagery.htb" | sudo tee -a /etc/hosts
@@ -454,9 +454,10 @@ web@Imagery:~/web$ id
 uid=1001(web) gid=1001(web) groups=1001(web)
 ```
 
-# 3. Post Explotacion
+# 3. Post Exploitation
 
 ## 3.1 Enumeration
+
 Procedemos con la fase de enumeración local para identificar vectores de escalada de privilegios. Para agilizar este proceso, utilizaremos la herramienta **LinPEAS**, un script automatizado que busca desconfiguraciones, archivos sensibles y vulnerabilidades en el kernel.
 
 En nuestra máquina de ataque, preparamos el binario y levantamos un servidor web para disponibilizar el archivo:
@@ -622,7 +623,7 @@ charcol>help
 
 Al inspeccionar el manual de ayuda, indica explícitamente que la herramienta no valida la **seguridad de los comandos ejecutados**.
 
-Haremos uso de la instrucción `auto`, para programar un schedule job que ejecutar la asignación del bit **SUID** al binario `/bin/bash` para que nos devuelva una shell de bash en modo root.
+Haremos uso de la instrucción `auto`, para programar un schedule job que ejecute la asignación del bit **SUID** al binario `/bin/bash` para que nos devuelva una shell de bash en modo root.
 
 ```
 charcol> auto add --schedule "* * * * *" --command "chmod u+s /bin/bash" --name "pwn" --log-output "/home/mark/pwn.log"
