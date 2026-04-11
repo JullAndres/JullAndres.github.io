@@ -1,6 +1,6 @@
 ---
 layout: single
-title: Modelo de Datos de Permisos en Salesforce
+title: Modelo de Datos de Permisos - Salesforce
 excerpt: "Salesforce implementa un modelo de seguridad multicapa basado en el principio de acumulación de permisos y separación de responsabilidades.."
 date: 2026-04-10
 classes: wide
@@ -11,7 +11,7 @@ header:
 categories:
   - salesforce
 tags:
-  - Profile
+  - profile
   - permission set
   - permission set group
 ---
