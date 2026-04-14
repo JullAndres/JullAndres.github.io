@@ -433,38 +433,194 @@ User (1) —— (N) PermissionSetGroupAssignment —— (1) PermissionSetGroup
 
 Cada registro indica que el usuario está vinculado al Permission Set consolidado generado por el sistema para ese grupo, el cual representa la suma efectiva de todos los PermissionSets contenidos en el Permission Set Group.
 
-# 5. Modelo Consolidado de Relaciones
+Importante:
+- No puede mezclar Permission Sets creados bajo distintas User Licenses.
+- Por lo tanto, el Permission Set agregado generado por el sistema siempre será compatible con la misma User License(Esto lo veremos mas adelante).
+
+# 5 Licenciamiento
+
+El modelo de licenciamiento en Salesforce define el marco dentro del cual pueden otorgarse permisos.
+
+La licencia no otorga permisos directamente. Define el límite superior de lo que un usuario puede llegar a tener.
+
+## 5.1 User License
+
+ApiName: `UserLicense`
+
+La User License define el tipo de usuario y el conjunto máximo de capacidades disponibles.
+
+- Es obligatoria
+- Define el tipo de usuario
+- Se asigna mediante el Profile
+- Es el límite superior del modelo
+
+Ejemplos:
+
+- Salesforce
+- Salesforce Platform
+- Identity
+- Customer Community
+- Partner Community
+
+La User License determina:
+
+- Qué objetos estándar están disponibles
+- Qué funcionalidades pueden usarse
+- Qué perfiles pueden crearse
+- Qué Permission Sets pueden asignarse
+
+Relación estructural:
 
 ```
 User
- ├── Profile
- │     └── PermissionSet (IsOwnedByProfile = true)
- │
- ├── PermissionSetAssignment
- │     └── PermissionSet
- │           ├── ObjectPermissions
- │           ├── FieldPermissions
- │           └── System Permissions
- │
- └── PermissionSetGroupAssignment
-       └── PermissionSetGroup
-             └── PermissionSetGroupComponent
-                   └── PermissionSet
-                         ├── ObjectPermissions
-                         ├── FieldPermissions
-                         └── System Permissions
+└── Profile
+└── UserLicense
 ```
 
-# 6. Evaluación de Permisos Efectivos
+Todos los Profiles tienen obligatoriamente una User License.
+Por lo tanto, todo usuario tiene una User License definida por su Profile.
+
+Sin una User License válida, el usuario no puede existir.
+
+## 5.2 Objeto PermissionSet
+
+El objeto PermissionSet es una entidad polimórfica. Un registro en PermissionSet puede representar:
+
+- Un Profile
+- Un Permission Set independiente
+- Un Permission Set agregado de un Permission Set Group
+- Un Muting Permission Set
+
+*Los campos de licencia definidos en PermissionSet aplican al registro específico, independientemente de su rol lógico.*
+
+El objeto PermissionSet puede tener dos tipos de restricciones relacionadas con licenciamiento:
+
+- Restricción por **User License**
+- Restricción por **Permission Set License (PSL)**
+
+Estas restricciones operan en niveles distintos.
+
+### 5.2.1 LicenseId (User License Compatibility)
+
+apiName: `PermissionSet.LicenseId``
+
+- Es visible en el API estándar (SOQL normal).
+- Referencia al objeto UserLicense.
+- Indica con qué tipo de User License es compatible el PermissionSet.
+
+Un PermissionSet solo puede asignarse si:
+
+- `User.Profile.UserLicenseId` es compatible con `PermissionSet.LicenseId`
+- Si no existe compatibilidad, Salesforce no permite la asignación.
+
+Importante:
+
+- Cuando el PermissionSet representa un Profile: `PermissionSet.LicenseId` es igual a `Profile.UserLicenseId`
+- Si es un Permission Set independiente: LicenseId indica con qué User License puede asignarse.
+- El Permission Set agregado mantiene el mismo LicenseId (UserLicense) que los Permission Sets componentes del grupo, ya que Salesforce no permite mezclar licencias incompatibles dentro de un mismo Permission Set Group.
+- Si es un Muting Permission Set: Está asociado al mismo User License que el Group al que pertenece.
+
+#### 5.2.2 PermissionSetLicenseId (Dependencia de PSL)
+
+apiName: `PermissionSet.PermissionSetLicenseId``
+
+- Solo está disponible vía Tooling API.
+- No es visible en SOQL estándar.
+- Referencia al objeto PermissionSetLicense.
+
+*Este campo referencia al objeto PermissionSetLicense y define si ese registro de PermissionSet requiere una PSL específica.*
+
+Regla:
+
+- Si `PermissionSet.PermissionSetLicenseId != null`, el usuario debe tener asignada esa PSL mediante: PermissionSetLicenseAssign
+- Si no la tiene, Salesforce no permite asignar el PermissionSet.
+
+Importante: 
+
+- Permission Sets independientes que habilitan funcionalidades add-on
+- Permission Sets agregados que contienen componentes que requieren PSL
+- No aplica conceptualmente a Profiles.
+
+## 5.3 Permission set license (PSL)
+
+ApiName: `PermissionSetLicense`
+
+Un Permission Set License es una licencia adicional y opcional que habilita funcionalidades específicas.
+
+No define el tipo de usuario. Habilita features avanzadas o add-ons.
+
+Ejemplos:
+
+- CPQ
+- Knowledge
+- Inbox
+- Field Service
+- Service Cloud Voice
+
+Relación estructural:
+
+````
+User
+└── PermissionSetLicenseAssign
+└── PermissionSetLicense
+````
+Se asigna directamente al usuario por medio del objeto `PermissionSetLicenseAssign`
+
+
+*Un usuario debe tener asignada la PSL antes de poder recibir un Permission Set que dependa de esa PSL.*
+
+# 6. Modelo Consolidado de Relaciones
+
+```
+User
+├── Profile
+│     ├── UserLicense
+│     └── PermissionSet (IsOwnedByProfile = true)
+│           ├── LicenseId → UserLicense
+│           ├── ObjectPermissions
+│           ├── FieldPermissions
+│           └── System Permissions
+│
+├── PermissionSetAssignment
+│     └── PermissionSet (independiente)
+│           ├── LicenseId → UserLicense
+│           ├── (PermissionSetLicenseId → PSL) [Tooling API]
+│           ├── ObjectPermissions
+│           ├── FieldPermissions
+│           └── System Permissions
+│
+├── PermissionSetGroupAssignment
+│     ├── PermissionSetGroup
+│     │     ├── PermissionSetGroupComponent
+│     │     │     └── PermissionSet (componentes existentes)
+│     │     │           ├── LicenseId → UserLicense
+│     │     │           └── (PermissionSetLicenseId → PSL) [opcional]
+│     │     │
+│     │     └── Muting PermissionSet
+│     │           └── PermissionSetGroupId != null
+│     │
+│     └── PermissionSet (Agregado generado por sistema)
+│           ├── LicenseId → UserLicense
+│           └── Evaluado por el motor de seguridad
+│
+└── PermissionSetLicenseAssign
+└── PermissionSetLicense (PSL)                       
+```
+
+# 7. Evaluación de Permisos Efectivos
 
 El acceso efectivo es acumulativo.
 
-```
-Permisos efectivos =
-    PermissionSet del Profile
-  + PermissionSets asignados directamente
-  + PermissionSets contenidos en PermissionSetGroups
-```
+- User License define el universo base.
+- Permission Set License habilita funcionalidades adicionales.
+- PermissionSets otorgan permisos dentro del marco permitido.
+- Permission Set Groups consolidan permisos.
+- El motor evalúa PermissionSets.
+- CRUD y FLS determinan acceso estructural.
+- Sharing determina acceso a registros.
+- Restriction Rules pueden reducir visibilidad.
+
+Claves del modelo:
 
 - Profile es técnicamente un PermissionSet especial
 - Todo permiso estructural vive en PermissionSet
@@ -477,21 +633,21 @@ Permisos efectivos =
 - La evaluación ocurre en capas secuenciales
 
 ```
-Identidad (User)
-  ↓
-Profile (PermissionSet base)
-  ↓
-PermissionSets adicionales
-  ↓
-PermissionSetGroups
-  ↓
-CRUD (ObjectPermissions)
-  ↓
-FLS (FieldPermissions)
-  ↓
-Sharing (OWD + Roles + Rules)
-  ↓
-Restriction Rules
+User
+↓
+Profile
+↓
+UserLicense (define universo base)
+↓
+PermissionSet.LicenseId compatible
+↓
+Si existe PermissionSetLicenseId
+↓
+Usuario debe tener PermissionSetLicenseAssign
+↓
+Motor evalúa PermissionSets
+↓
+CRUD → FLS → Sharing → Restriction Rules
 ```
 
 # Conclusión
