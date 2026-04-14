@@ -520,81 +520,83 @@ El objeto PermissionSet es una entidad polimórfica. Un registro en PermissionSe
 
 *Los campos de licencia definidos en PermissionSet aplican al registro específico, independientemente de su rol lógico.*
 
+Este campo `LicenseId` un lookup polimórfico que puede referenciar a:
+
+• UserLicense
+• PermissionSetLicense
+
 El objeto PermissionSet puede tener dos tipos de restricciones relacionadas con licenciamiento:
 
 - Restricción por **User License**
 - Restricción por **Permission Set License (PSL)**
 
-Estas restricciones operan en niveles distintos.
+Este único campo modela las restricciones de licenciamiento del PermissionSet.
 
-### 5.3.1 LicenseId (User License Compatibility)
+Dependiendo del tipo de registro que represente el PermissionSet, el comportamiento de LicenseId cambia.
 
-apiName: `PermissionSet.LicenseId``
+### 5.3.1 Restricción por User License
 
-- Es visible en el API estándar (SOQL normal).
-- Referencia al objeto UserLicense.
-- Indica con qué tipo de User License es compatible el PermissionSet.
+Cuando `LicenseId` apunta a un registro de `UserLicense`:
+
+- Define compatibilidad con el tipo de usuario.
+- Controla qué usuarios pueden recibir ese PermissionSet.
 
 Un PermissionSet solo puede asignarse si:
 
 - `User.Profile.UserLicenseId` es compatible con `PermissionSet.LicenseId`
-- Si no existe compatibilidad, Salesforce no permite la asignación.
 
-Importante:
+Comportamiento según tipo de registro:
 
-- Cuando el PermissionSet representa un Profile: `PermissionSet.LicenseId` es igual a `Profile.UserLicenseId`
-- Si es un Permission Set independiente: LicenseId indica con qué User License puede asignarse.
-- El Permission Set agregado mantiene el mismo LicenseId (UserLicense) que los Permission Sets componentes del grupo, ya que Salesforce no permite mezclar licencias incompatibles dentro de un mismo Permission Set Group.
-- Si es un Muting Permission Set: Está asociado al mismo User License que el Group al que pertenece.
+- Cuando el PermissionSet representa un Profile: `PermissionSet.LicenseId = Profile.UserLicenseId`.
+- Si es un Permission Set independiente (sin PSL): `LicenseId` indica con qué UserLicense puede asignarse.
+- El Permission Set agregado (consolidado) mantiene el mismo `LicenseId` (UserLicense) que los Permission Sets componentes del grupo. Salesforce no permite mezclar licencias incompatibles dentro de un mismo Permission Set Group.
+- El Muting Permission Set también está asociado al mismo UserLicense que el Group al que pertenece.
 
-#### 5.3.2 PermissionSetLicenseId (Dependencia de PSL)
+En todos estos casos, `LicenseId` actúa como restricción de compatibilidad base.
 
-apiName: `PermissionSet.PermissionSetLicenseId``
+### 5.3.2 Restricción por Permission Set License (PSL)
 
-- Solo está disponible vía Tooling API.
-- No es visible en SOQL estándar.
-- Referencia al objeto PermissionSetLicense.
+Cuando `LicenseId` apunta a un registro de `PermissionSetLicense`:
 
-*Este campo referencia al objeto PermissionSetLicense y define si ese registro de PermissionSet requiere una PSL específica.*
+- El PermissionSet requiere una PSL específica.
+- Funciona como dependencia de add-on.
+- El usuario debe tener asignada esa PSL mediante PermissionSetLicenseAssign.
 
 Regla:
 
-- Si `PermissionSet.PermissionSetLicenseId != null`, entonces ese PermissionSet declara una dependencia explícita de una PSL. Antes de asignarlo, Salesforce valida que el usuario tenga asignada esa PSL mediante `PermissionSetLicenseAssign`
+Si `PermissionSet.LicenseId` referencia a un `PermissionSetLicense`, el usuario debe tener esa PSL asignada antes de recibir el PermissionSet.
 - Si no la tiene, Salesforce no permite asignar el PermissionSet.
 - Aplica únicamente a:
   - Permission Sets independientes creados manualmente
   - Permission Sets gestionados por paquetes
   - Permission Sets estándar del sistema
 
-Importante: 
-
-- No aplica conceptualmente a Profiles.
-- No aplica a Permission Sets independientes
-- No aplica a Permission Sets agregados generados por un Permission Set Group (Registro consolidad generado por el sistema)
-
-*El Permission Set consolidado no define ni hereda PermissionSetLicenseId.*
-
 **Permission Set consolidado por el sistema**
 
 El Permission Set agregado o consolidado generado por el sistema:
 
-- Tiene normalmente PermissionSetLicenseId = null.
+- Mantiene LicenseId apuntando a UserLicense.
+- No apunta a PermissionSetLicense.
+- No consolida múltiples PSL.
 - No declara dependencia propia de PSL.
-- No consolida dependencias de sus componentes.
 
-Si un Permission Set Group contiene componentes que requieren PSL:
+Si un Permission Set Group contiene componentes cuyo `LicenseId` apunta a `PermissionSetLicense`:
 
-- Salesforce valida la dependencia de PSL sobre cada componente individual antes de consolidar.
-- La validación no se realiza sobre el Permission Set agregado.
+- Salesforce valida la dependencia de PSL sobre cada componente individual.
+- La validación ocurre antes de generar o evaluar el Permission Set agregado.
+- El Permission Set agregado no participa en la validación de PSL.
 
 #### 5.2.3 Modelo de Validación Completo
 
-Para asignar un PermissionSet a un usuario, Salesforce valida:
+Al asignar un PermissionSet a un usuario, Salesforce valida el campo LicenseId.
+El comportamiento depende del tipo de registro al que apunte:
 
-1. Compatibilidad de *User License*: `Profile.UserLicenseId` compatible con `PermissionSet.LicenseId`
-2. Asignanacion de *PermissionSet License* : `PermissionSet.PermissionSetLicenseId != null` usuario debe tener asignada la PSL correspondiente mediante `PermissionSetLicenseAssign`.
+- Si LicenseId apunta a UserLicense → Se valida que el Profile.UserLicenseId del usuario sea compatible.
+-  Si LicenseId apunta a PermissionSetLicense → Se valida que el usuario tenga asignada esa PSL mediante PermissionSetLicenseAssign.
 
-*Ambas validaciones son independientes.*
+Estas validaciones son automáticas y previas a la asignación.
+
+En el caso de Permission Set Groups, la validación se realiza sobre los Permission Sets componentes antes de consolidar el Permission Set agregado.
 
 
 # 6. Modelo Consolidado de Relaciones
@@ -611,8 +613,7 @@ User
 │
 ├── PermissionSetAssignment
 │     └── PermissionSet (independiente)
-│           ├── LicenseId → UserLicense
-│           ├── (PermissionSetLicenseId → PSL) [Tooling API]
+│           ├── LicenseId → (UserLicense o PermissionSetLicense)
 │           ├── ObjectPermissions
 │           ├── FieldPermissions
 │           └── System Permissions
@@ -621,18 +622,18 @@ User
 │     ├── PermissionSetGroup
 │     │     ├── PermissionSetGroupComponent
 │     │     │     └── PermissionSet (componentes existentes)
-│     │     │           ├── LicenseId → UserLicense
-│     │     │           └── (PermissionSetLicenseId → PSL) [opcional]
+│     │     │           ├── LicenseId → (UserLicense o PermissionSetLicense)
 │     │     │
 │     │     └── Muting PermissionSet
-│     │           └── PermissionSetGroupId != null
+│     │           ├── PermissionSetGroupId != null
+│     │           └── LicenseId → UserLicense
 │     │
 │     └── PermissionSet (Agregado generado por sistema)
 │           ├── LicenseId → UserLicense
 │           └── Evaluado por el motor de seguridad
 │
 └── PermissionSetLicenseAssign
-└── PermissionSetLicense (PSL)                       
+      └── PermissionSetLicense (PSL)                  
 ```
 
 # 7. Evaluación de Permisos Efectivos
