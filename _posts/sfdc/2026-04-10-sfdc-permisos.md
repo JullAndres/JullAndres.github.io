@@ -20,11 +20,11 @@ tags:
 
 `Profile`, `PermissionSet` y `PermissionSetGroup` El tema de conversación en un café de consultores salesforce “preocupados”, intentando responder la siguiente pregunta: **¿ Cuál es la mejor forma de gestionar y administrar los permisos de la plataforma ?**. 
 
-La propuesta más frecuente es: Bueno llevemos todo en el `Profile` y solo creemos `permissionSet` para funcionalidades específicas que serán asignadas directamente a los usuarios independientemente de su perfil. Causando un caos de permisos en la plataforma cumpliendo con los accesos pero yendo en contra con el **Principio de mínimos privilegios**.
+La propuesta más frecuente es: Bueno llevemos todo en el `Profile` y solo creemos `permissionSet` para funcionalidades específicas que serán asignadas directamente a los usuarios independientemente de su perfil. Causando un caos de permisos en la plataforma cumpliendo con los accesos pero yendo en contra con el **principio de mínimos privilegios**.
 
 Es un punto clave en la seguridad de cualquier aplicación de software y en la que salesforce nos brinda las herramientas y conceptos administrativos correctos para llevarlo a cabo.
 
-A esta pregunta siempre suelo responder lo siguiente: Bueno y qué tal si les digo que: *Internamente para salesforce `profile`,  `permission set` y `permission set group` son lo **mismo!!** *. Si suena loco..
+A esta pregunta siempre suelo responder lo siguiente: *Bueno y qué tal si les digo que: Internamente para salesforce `profile`,  `permission set` y `permission set group` son lo **mismo!!***. Si suena loco..
 
 Para entenderlo debemos hacernos una pregunta mas elemental **¿ Cómo internamente salesforce calcula los permisos ?**
 
