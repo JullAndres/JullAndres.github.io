@@ -1,6 +1,6 @@
 ---
 layout: single
-title: ¿ Cómo internamente salesforce calcula los permisos ? - Salesforce
+title: Objecto PermissionSet la unidad real que el motor de seguridad evalúa- Salesforce
 excerpt: "Salesforce implementa un modelo de seguridad multicapa basado en el principio de acumulación de permisos y separación de responsabilidades.."
 date: 2026-04-10
 classes: wide
@@ -24,11 +24,9 @@ La propuesta más frecuente es: Bueno llevemos todo en el `Profile` y solo creem
 
 Es un punto clave en la seguridad de cualquier aplicación de software y en la que salesforce nos brinda las herramientas y conceptos administrativos correctos para llevarlo a cabo.
 
-La respuesta simple a esta pregunta llevando a cabo el uso adecuado de las herramientas administrativas para la [Gestión de acceso y permisos de datos en salesforce](https://help.salesforce.com/s/articleView?id=platform.security_data_access_mgmt.htm&type=5) es: Usar el `Profile` solo para definir los permisos básicos y evitar extenderlos agregando permisos de funcionalidades adicionales, usar `Permission Set` donde cada uno de ellos representa una funcionalidad adicional, usar un `Permission Set Group` por perfil y agregar en ellos estos `permission set`.  
+A esta pregunta siempre suelo responder lo siguiente: Bueno y qué tal si les digo que: *Internamente para salesforce `profile`,  `permission set` y `permission set group` son lo **mismo!!** *. Si suena loco..
 
-Pero.. Pero te preguntaras y.. ¿ Por qué es esta una forma correcta de administrar los permisos y cuáles son sus ventajas? Bueno y qué tal si les digo que: *Internamente para salesforce `profile`,  `permission set` y `permission set group` son lo **mismo!!** *
-
-Entonces la pregunta fundamental que debemos hacernos es: **¿ Cómo internamente salesforce calcula los permisos ?**
+Para entenderlo debemos hacernos una pregunta mas elemental **¿ Cómo internamente salesforce calcula los permisos ?**
 
 Primero debemos entender cuál es la arquitectura del modelo de seguridad, salesforce implementa un modelo de seguridad multicapa basado en el **principio de acumulación de permisos y separación de responsabilidades**.
 
@@ -42,33 +40,31 @@ Las capas principales son:
 - **Seguridad a Nivel de Registro** → OWD + Role Hierarchy + Sharing
 - **Restricción Adicional** → Restriction Rules
 
-Cada capa cumple una función específica dentro del cálculo del acceso efectivo. Documentamos la *arquitectura del modelo de seguridad* para un usuario y cómo se relaciona con los permisos a nivel de objetos, campos y licenciamiento.
+Cada capa cumple una función específica dentro del cálculo del acceso efectivo. Documentaremos la *arquitectura del modelo de seguridad* para un usuario y entenderemos cómo se relaciona con los permisos en sus diferentes abstracciones a nivel de objetos, campos y licenciamiento.
 
 # Contents
 - [1. Identidad y Permiso Base](#1-identidad-y-permiso-base)
   - [1.1 User](#11-user)
   - [1.2 Profile](#12-profile)
-- [2. PermissionSet – Unidad Básica de Permisos y Nucleo del modelo](#2-permissionset--unidad-básica-de-permisos-y-nucleo-del-modelo)
+- [2. Objeto PermissionSet – Unidad Básica de Permisos y Nucleo del modelo](#2-objeto-permissionset--unidad-básica-de-permisos-y-núcleo-del-modelo)
   - [2.1 Unidad Básica de Permisos](#21-unidad-básica-de-permisos)
     - [2.1.1 ObjectPermissions](#211-objectpermissions)
     - [2.1.2 FieldPermissions](#212-fieldpermissions)
     - [2.1.3 SetupEntityAccess](#213-setupentityaccess)
-  - [2.2 Nucleo del modelo y Naturaleza Polimórfica](#22-nucleo-del-modelo-y-naturaleza-polimórfica)
+  - [2.2 Nucleo del modelo y Naturaleza Polimórfica](#22-núcleo-del-modelo-y-naturaleza-polimórfica)
     - [2.2.1 Profile](#221-profile)
-    - [2.2.2 Permission Set Independiente](#222-permission-set-independiente)
-    - [2.2.3 Permission Set Asociado a Groupo](#223-permission-set-asociado-a-groupo)
-- [3. Asignación de Permisos a Usuarios](#3-asignación-de-permisos-a-usuarios)
-  - [3.1 Asignación Directa de Permission Sets](#31-asignación-directa-de-permission-sets)
-    - [3.1.1 PermissionSetAssignment](#311-permissionsetassignment)
-  - [3.2 Asignación Mediante Permission Set Groups](#32-asignación-mediante-permission-set-groups)
-    - [3.2.1 PermissionSetGroup](#321-permissionsetgroup)
-    - [3.2.2 PermissionSetGroupComponent](#322-permissionsetgroupcomponent)
-- [4. Licenciamiento](#4-licenciamiento)
-  - [4.1 User License](#41-user-license)
-  - [4.2 Permission set license (PSL)](#42-permission-set-license-psl)
-  - [4.3 Objeto PermissionSet](#43-objeto-permissionset)
-    - [4.3.1 Restricción por User License](#431-restricción-por-user-license)
-    - [4.3.2 Restricción por Permission Set License (PSL)](#432-restricción-por-permission-set-license-psl)
+    - [2.2.2 Permission Set](#222-permission-set)
+    - [2.2.3 Permission Set Group](#223-permission-set-group)
+- [3. Objecto PermissionSetGroup - Capa de abstracción orientada a la gobernanza y escalabilidad](#3-objecto-permissionsetgroup---capa-de-abstracción-orientada-a-la-gobernanza-y-escalabilidad)
+  - [3.1 PermissionSetGroupComponent](#31-permissionsetgroupcomponent)
+- [4. Asignación de Permisos a Usuarios](#4-asignación-de-permisos-a-usuarios)
+  - [4.1 PermissionSetAssignment](#41-permissionsetassignment)
+- [5. Licenciamiento](#5-licenciamiento)
+  - [5.1 User License](#51-user-license)
+  - [5.2 Permission set license (PSL)](#52-permission-set-license-psl)
+  - [5.3 Objeto PermissionSet](#53-objeto-permissionset)
+    - [5.3.1 Restricción por User License](#531-restricción-por-user-license)
+    - [5.3.2 Restricción por Permission Set License (PSL)](#532-restricción-por-permission-set-license-psl)
 
 
 # 1. Identidad y Permiso Base
@@ -93,11 +89,10 @@ Profile (1) —— (1) User
 
 User (1) —— (N) PermissionSetAssignment —— (1) PermissionSet
 
-User (1) —— (N) PermissionSetGroupAssignment —— (1) PermissionSet
+User (1) —— (N) PermissionSetAssignment —— (1) PermissionSetGroup
 ```
 
-*El objeto `User` no almacena permisos directamente.*
-*Solo referencia estructuras que los contienen.*
+*El objeto `User` no almacena permisos directamente. Solo referencia estructuras que los contienen.*
 
 ## 1.2 Profile
 
@@ -169,7 +164,7 @@ Representa permisos **CRUD** sobre objetos.
 **Relaciones estructurales**
 
 ```
-PermissionSet (1) —— (N) ObjectPermissions
+PermissionSet (1) —— (N) ObjectPermission
 ```
 
 *Controla acceso a nivel de objeto.*
@@ -244,9 +239,17 @@ Campos que permiten identificar su rol:
 
 ### 2.2.1 Profile
 
-Es internamente un PermissionSet especial.
+Internamente en salesforce por cada `Profile` existe un registro en el objeto `PermissionSet` que representa los permisos de cada `Profile` y que es administrado a partir de la [standard metadata type profile](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_profile.htm) o desde la interfaz grafica. 
 
-SOQL Query CRUD por objeto:
+El mecanismo para obtener este registro es mediante el filtro: 
+
+```
+type = 'Profile' AND 
+IsOwnedByProfile = true AND
+ProfileId  != null
+```
+
+**Ejemplo SOQL Query CRUD por objeto**:
 
 ```SQL
 SELECT 
@@ -272,18 +275,11 @@ Parent.ProfileId  != null
 ORDER BY Parent.Type ASC
 ```
 
-SOQL Query Field Level Security por objeto:
+**Ejemplo SOQL Query Field Level Security por objeto**:
 
 ```SQL
 SELECT 
-    Parent.Name, 
-    Parent.Label, 
-    Parent.Description,
-    Parent.Type,
-    Parent.Profile.Name,
-    parent.PermissionSetGroup.DeveloperName, 
-    parent.LicenseId, 
-    Parent.License.Name,
+    ...
     Field, 
     PermissionsRead, 
     PermissionsEdit 
@@ -295,23 +291,27 @@ Parent.ProfileId  != null
 ORDER BY Parent.Name, Field
 ```
 
+### 2.2.2 Permission Set
 
-### 2.2.2 Permission Set Independiente
+Internamente en salesforce por cada `PermissionSet` existe un registro en el objeto `PermissionSet` que representa los permisos de cada `permissionset` y que es administrado a partir de la [standard metadata type permissionSet](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_permissionset.htm) o desde interfaz grafica.
 
-- Creado manualmente
-- No pertenece a ningún grupo
-- Asignable directamente mediante `PermissionSetAssignment`.
+jaja! si, así como lo lees, veámoslo con lupa para entenderlo:
+
+Cuando creamos un `PermissionSet` desde la interfaz gráfica de salesforce para ahí agregar los permisos a objetos, clases, campos etc. Salesforce internamente crea un registro en el objeto `PermissionSet`pero también internamente crea una metadata de tipo `PermissionSet`, donde estos tres mecanismo representan una unidad, queriendo decir que tenemos tres formas de manipular los permisos: por la interfaz gráfica, por deploy o manipulando los registros. Y así mismo funciona cuando hablamos de perfiles.
+
+El mecanismo para obtener este registro es mediante el filtro: 
+
+```SQL
+type = 'Regular' AND 
+ProfileId  = null AND 
+PermissionSetGroupId = null
+```
+
+**Ejemplo SOQL Query CRUD por objeto**:
 
 ```SQL
 SELECT 
-    Parent.Name, 
-    Parent.Label, 
-    Parent.Description,
-    Parent.Type,
-    Parent.Profile.Name,
-    parent.PermissionSetGroup.DeveloperName, 
-    parent.LicenseId, 
-    Parent.License.Name,
+    ...
     PermissionsRead,
     PermissionsCreate,
     PermissionsEdit, 
@@ -326,18 +326,11 @@ Parent.PermissionSetGroupId = null
 ORDER BY Parent.Type ASC
 ```
 
-SOQL Query Field Level Security por objeto:
+**Ejemplo SOQL Query Field Level Security por objeto**:
 
 ```SQL
 SELECT 
-    Parent.Name, 
-    Parent.Label, 
-    Parent.Description,
-    Parent.Type,
-    Parent.Profile.Name,
-    parent.PermissionSetGroup.DeveloperName, 
-    parent.LicenseId, 
-    Parent.License.Name,
+    ...
     Field, 
     PermissionsRead, 
     PermissionsEdit 
@@ -349,130 +342,77 @@ Parent.PermissionSetGroupId = null
 ORDER BY Parent.Name, Field
 ```
 
-### 2.2.3 Permission Set Asociado a Grupo
+### 2.2.3 Permission Set Group
 
-Un “Permission Set” relacionado con un “Permission Set Group” puede participar en tres roles distintos:
+Internamente en salesforce por cada `PermissionSetGroup` existe un registro en el objeto `PermissionSet` que representa los permisos del `PermissionSetGroup` y que es administrado a partir de la [standard metadata type PermissionSetGroup](https://developer.salesforce.com/docs/atlas.en-us.api_meta.meta/api_meta/meta_permissionsetgroup.htm) o desde la interfaz grafica.
 
-- Permission Set Componente del grupo
-- Muting Permission Set
-- Permission Set agregado (consolidado)
+El mecanismo para obtener este registro es mediante el filtro: 
 
-Es importante distinguir cómo se relaciona cada uno con el Grupo.
+```SQL
+type = 'Group' AND 
+ProfileId  = null AND 
+PermissionSetGroupId != null
+```
 
-**Permission Set Componente del grupo**
+Me gusta llamarlo **`PermissionSet` agregado o consolidado por el sistema**. Porque cuando un `PermissionSetGroup` es asignado a un usuario, Salesforce de manera automática e internamente:
 
-Es un “Permission Set” independiente existente que ahora forma parte de un Permission Set Group.
+- Identifica los `PermissionSets` que componen al grupo, para sumar todos los accesos.
+- Aplica las exclusiones definidas en el `MutingPermissionSet` (si existen).
+- Generando o actualizando este registro en el objeto `PermissionSet`.
 
-Su relación con el grupo se define mediante el objeto: `PermissionSetGroupComponent`
-
-Importante:
-
-- No se crea un nuevo registro en el objeto `PermissionSet`.
-- Se reutiliza el mismo Id del `PermissionSet` original.
-- El campo `PermissionSetGroupId` permanece en null.
-
-El componente no está vinculado al grupo por campo, sino por la tabla intermedia `PermissionSetGroupComponent`.
-
-**Muting Permission Set**
-
-Cuando se crea un Permission Set Group, Salesforce genera automáticamente un PermissionSet adicional.
-
-Este registro:
-
-- Es distinto de los Permission Sets componentes.
-- Tiene `PermissionSetGroupId != null`.
-- Está estructuralmente vinculado al Grupo mediante ese campo.
-
-El Muting:
-
-- No modifica los Permission Sets originales.
-- No elimina permisos estructuralmente.
-- Define exclusiones aplicadas durante la consolidación del Grupo.
-
-*Es un registro nuevo en el objeto PermissionSet.*
-
-**Permission Set agregado (consolidado)**
-
-Cuando un Permission Set Group es asignado a un usuario, Salesforce:
-
-- Identifica los Permission Sets componentes.
-- Aplica las exclusiones definidas en el Muting (si existen).
-- Genera o actualiza un PermissionSet agregado.
-
-Este PermissionSet agregado:
+Este PermissionSet consolidado:
 
 - Es un registro distinto en PermissionSet.
-- Tiene `PermissionSetGroupId != null`.
+- Tiene `type = 'Group'` y `PermissionSetGroupId != null`. Como vimos en el filtro anterior.
 - Es referenciado en `PermissionSetGroupAssignment.PermissionSetId`.
 - Es el que realmente evalúa el motor de seguridad.
 
-# 3. Asignación de Permisos a Usuarios
+**Permission Sets componentes del grupo**.
 
-Los permisos nunca se asignan directamente al usuario.
+Son los `PermissionSets` independientes existentes que ahora forman parte de un `PermissionSetGroup`.
 
-Siempre se asignan mediante estructuras intermedias.
+Su relación con el grupo se define mediante el objeto: `PermissionSetGroupComponent`
 
-Existen dos mecanismos:
+- No se crea un nuevo registro en el objeto `PermissionSet`.
+- Se reutiliza el mismo Id del `PermissionSet` original.
+- El campo `PermissionSetGroupId` permanece en `null`.
 
-- Asignación directa de Permission Sets
-- Asignación mediante Permission Set Groups
+**Muting Permission Set**:
 
-Ambos mecanismos son acumulativos.
+Se usa cuando no se desea asignar a los usuarios todos los permisos incluidos en el `PermissionSetGroup`
 
-## 3.1 Asignación Directa de Permission Sets
+- No modifica los `PermissionSets` originales.
+- No elimina permisos estructuralmente.
+- Define exclusiones aplicadas durante la consolidación del grupo.
 
-### 3.1.1 PermissionSetAssignment
+# 3. Objecto PermissionSetGroup - Capa de abstracción orientada a la gobernanza y escalabilidad.
 
-API Name: `PermissionSetAssignment`
+API Name: [`PermissionSetGroup`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetgroup.htm)
 
-Une usuarios con PermissionSets. Cada registro representa una asignación explícita de un PermissionSet al usuario.
+Es un contenedor lógico de múltiples `PermissionSets`.
 
-**Campos principales**
+**Campos importantes**
 
-- AssigneeId (UserId)
-- PermissionSetId
-
-**Relación**
-
-```
-User (1) —— (N) PermissionSetAssignment —— (1) PermissionSet
-```
-
-*Es la forma más simple y directa de extender permisos más allá del Profile.*
-
-
-## 3.2 Asignación Mediante Permission Set Groups
-
-Este mecanismo introduce una capa de abstracción orientada a gobernanza y escalabilidad.
-
-### 3.2.1 PermissionSetGroup
-
-API Name: `PermissionSetGroup`
-
-Es un contenedor lógico de múltiples PermissionSets.
+- `DeveloperName`
+- `Status`
 
 **Características**
 
 - No almacena permisos directamente.
-- Permite gestionar permisos por rol funcional o dominio.
 - Reduce asignaciones manuales masivas.
 
-**Campos principales**
-- DeveloperName
-- Status
+## 3.1 PermissionSetGroupComponent
 
-### 3.2.2 PermissionSetGroupComponent
-
-API Name: `PermissionSetGroupComponent`
+API Name: [`PermissionSetGroupComponent`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetgroupcomponent.htm)
 
 Define la composición interna del grupo.
 
-**Campos principales**
+**Campos importantes**
 
-- PermissionSetGroupId
-- PermissionSetId
+- `PermissionSetGroupId`
+- `PermissionSetId`
 
-**Relación**
+**Relaciones estructurales**
 
 ```
 PermissionSetGroup  (1) —— (N) PermissionSetGroupComponent —— (1) PermissionSet
@@ -482,32 +422,41 @@ Cada registro indica que un `PermissionSet` forma parte del grupo.
 
 *Es la capa estructural que conecta agrupación con permisos reales.*
 
-### 3.2.3 PermissionSetGroupAssignment
+# 4. Asignación de Permisos a Usuarios
 
-API Name: `PermissionSetGroupAssignment`
+Los permisos nunca se asignan directamente al usuario, siempre se asignan mediante estructuras intermedias.
 
-Denine la asignacion del grupo a al usuario
+Existen dos mecanismos:
 
-**Campo importantes**
+- Asignación directa de `PermissionSets`.
+- Asignación mediante `PermissionSetGroups`
 
-- AssigneeId(User)
-- IsActive
-- PermissionSetGroupId
-- PermissionSetId - **Es un PermissionSet consolidado, generado por el sistema*
+Ambos mecanismos son acumulativos.
 
-**Relacion**
+## 4.1 PermissionSetAssignment
+
+API Name: [`PermissionSetAssignment`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetassignment.htm)
+
+Une usuarios con `PermissionSets`, cada registro representa una asignación explícita de un `PermissionSet` o `PermissionSetGroup` al usuario.
+
+**Campos importantes**
+
+- `AssigneeId` → Lookup a **objeto** `User`
+- `PermissionSetId`
+- `PermissionSetGroupId`
+- `IsActive`
+
+**Relaciones estructurales**
 
 ```
-User (1) —— (N) PermissionSetGroupAssignment —— (1) PermissionSetGroup
+User (1) —— (N) PermissionSetAssignment —— (1) PermissionSet
+
+User (1) —— (N) PermissionSetAssignment —— (1) PermissionSetGroup
 ```
 
-Cada registro indica que el usuario está vinculado al Permission Set consolidado generado por el sistema para ese grupo, el cual representa la suma efectiva de todos los PermissionSets contenidos en el Permission Set Group.
+*Es la forma más simple y directa de extender permisos más allá del `Profile`.*
 
-Importante:
-- No puede mezclar Permission Sets creados bajo distintas User Licenses.
-- Por lo tanto, el Permission Set agregado generado por el sistema siempre será compatible con la misma User License(Esto lo veremos mas adelante).
-
-# 4. Licenciamiento
+# 5. Licenciamiento
 
 El modelo de licenciamiento en Salesforce define el marco dentro del cual pueden otorgarse permisos.
 
