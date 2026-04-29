@@ -1,6 +1,6 @@
 ---
 layout: single
-title: Objecto PermissionSet la unidad real que el motor de seguridad evalúa- Salesforce
+title: La unidad de permisos que el motor de seguridad realmente evalúa - Salesforce
 excerpt: "Salesforce implementa un modelo de seguridad multicapa basado en el principio de acumulación de permisos y separación de responsabilidades.."
 date: 2026-04-10
 classes: wide
@@ -11,14 +11,22 @@ header:
 categories:
   - salesforce
 tags:
+  - user
   - profile
-  - permission set
-  - permission set group
+  - permissionset
+  - permissionsetgroup
+  - ObjectPermissions
+  - FieldPermissions
+  - SetupEntityAccess
+  - PermissionSetGroupComponent
+  - PermissionSetAssignment
+  - UserLicense
+  - Permissionsetlicense
 ---
 
 # About
 
-`Profile`, `PermissionSet` y `PermissionSetGroup` El tema de conversación en un café de consultores salesforce “preocupados”, intentando responder la siguiente pregunta: **¿ Cuál es la mejor forma de gestionar y administrar los permisos de la plataforma ?**. 
+`Profile`, `PermissionSet` y `PermissionSetGroup` El tema de conversación en un café de consultores salesforce “preocupados” e intentando responder la siguiente pregunta: **¿ Cuál es la mejor forma de gestionar y administrar los permisos de la plataforma ?**. 
 
 La propuesta más frecuente es: Bueno llevemos todo en el `Profile` y solo creemos `permissionSet` para funcionalidades específicas que serán asignadas directamente a los usuarios independientemente de su perfil. Causando un caos de permisos en la plataforma cumpliendo con los accesos pero yendo en contra con el **principio de mínimos privilegios**.
 
@@ -40,7 +48,7 @@ Las capas principales son:
 - **Seguridad a Nivel de Registro** → OWD + Role Hierarchy + Sharing
 - **Restricción Adicional** → Restriction Rules
 
-Cada capa cumple una función específica dentro del cálculo del acceso efectivo. Documentaremos la *arquitectura del modelo de seguridad* para un usuario y entenderemos cómo se relaciona con los permisos en sus diferentes abstracciones a nivel de objetos, campos y licenciamiento.
+Cada capa cumple una función específica dentro del cálculo del acceso efectivo. Documentaremos la *arquitectura del modelo de seguridad* para un usuario y entenderemos cómo se relaciona con los permisos en sus diferentes abstracciones a nivel de objetos, campos y licenciamientos.
 
 # Contents
 - [1. Identidad y Permiso Base](#1-identidad-y-permiso-base)
@@ -60,11 +68,11 @@ Cada capa cumple una función específica dentro del cálculo del acceso efectiv
 - [4. Asignación de Permisos a Usuarios](#4-asignación-de-permisos-a-usuarios)
   - [4.1 PermissionSetAssignment](#41-permissionsetassignment)
 - [5. Licenciamiento](#5-licenciamiento)
-  - [5.1 User License](#51-user-license)
-  - [5.2 Permission set license (PSL)](#52-permission-set-license-psl)
+  - [5.1 UserLicense](#51-userlicense)
+  - [5.2 PermissionsetLicense(PSL)](#52-permissionsetlicense-psl)
   - [5.3 Objeto PermissionSet](#53-objeto-permissionset)
-    - [5.3.1 Restricción por User License](#531-restricción-por-user-license)
-    - [5.3.2 Restricción por Permission Set License (PSL)](#532-restricción-por-permission-set-license-psl)
+    - [5.3.1 Restricción por User License](#531-restricción-por-userlicense)
+    - [5.3.2 Restricción por Permission Set License(PSL)](#532-restricción-por-permissionsetlicensepsl)
 
 
 # 1. Identidad y Permiso Base
@@ -458,15 +466,15 @@ User (1) —— (N) PermissionSetAssignment —— (1) PermissionSetGroup
 
 # 5. Licenciamiento
 
-El modelo de licenciamiento en Salesforce define el marco dentro del cual pueden otorgarse permisos.
+El modelo de licenciamiento define el marco dentro del cual pueden otorgarse permisos.
 
-La licencia no otorga permisos directamente. Define el límite superior de lo que un usuario puede llegar a tener.
+La licencia no otorga permisos directamente, define el límite superior de lo que un usuario puede llegar a tener.
 
-## 4.1 User License
+## 5.1 UserLicense
 
-ApiName: `UserLicense`
+ApiName: [`UserLicense`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_userlicense.htm)
 
-La User License define el tipo de usuario y el conjunto máximo de capacidades disponibles.
+Define el tipo de usuario y el conjunto máximo de capacidades disponibles.
 
 - Es obligatoria
 - Define el tipo de usuario
@@ -475,179 +483,182 @@ La User License define el tipo de usuario y el conjunto máximo de capacidades d
 
 Ejemplos:
 
-- Salesforce
-- Salesforce Platform
-- Identity
-- Customer Community
-- Partner Community
+- `Salesforce`
+- `Salesforce Platform`
+- `Identity`
+- `Customer Community`
+- `Partner Community`
 
-La User License determina:
+Determina:
 
 - Qué objetos estándar están disponibles
 - Qué funcionalidades pueden usarse
 - Qué perfiles pueden crearse
 - Qué Permission Sets pueden asignarse
 
-Relación estructural:
+**Campos importantes**
+
+- `Name`
+- `MasterLabel`
+- `Status`
+- `TotalLicenses`
+- `UsedLicenses`
+- `UsedLicensesLastUpdated`
+
+
+**Relaciones estructurales**
 
 ```
-User
-└── Profile
-└── UserLicense
+User (1) —— (1) Profile —— (1) UserLicense
 ```
 
-Todos los Profiles tienen obligatoriamente una User License.
-Por lo tanto, todo usuario tiene una User License definida por su Profile.
+Todos los Profiles tienen obligatoriamente una `UserLicense` por lo tanto, todo usuario tiene una User License definida por su Profile.
 
-Sin una User License válida, el usuario no puede existir.
+*Sin una User License válida, el usuario no puede existir*.
 
-## 4.2 Permission set license (PSL)
+## 5.2 PermissionsetLicense (PSL)
 
-ApiName: `PermissionSetLicense`
+ApiName: [`PermissionSetLicense`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetlicense.htm)
 
-Un Permission Set License es una licencia adicional y opcional que habilita funcionalidades específicas.
+Licencia adicional y opcional que habilita funcionalidades específicas.
 
 No define el tipo de usuario. Habilita features avanzadas o add-ons.
 
 Ejemplos:
 
-- CPQ
-- Knowledge
-- Inbox
-- Field Service
-- Service Cloud Voice
+- `CPQ`
+- `Knowledge`
+- `Inbox`
+- `Field Service`
+- `Service Cloud Voice`
 
-Relación estructural:
+**Campos importantes**
 
-````
-User
-└── PermissionSetLicenseAssign
-└── PermissionSetLicense
-````
-Se asigna directamente al usuario por medio del objeto `PermissionSetLicenseAssign`
+- `DeveloperName`
+- `MasterLabel`
+- `Status`
+- `TotalLicenses`
+- `UsedLicenses`
 
-*Un usuario debe tener asignada la PSL antes de poder recibir un Permission Set que dependa de esa PSL.*
+**Relaciones estructurales**
 
-## 4.3 Objeto PermissionSet
+```
+User (1) —— (N) PermissionSetLicenseAssign —— (1) PermissionSetLicense
+```
 
-El objeto PermissionSet es una entidad polimórfica. Un registro en PermissionSet puede representar:
+Se asigna directamente al usuario por medio del objeto [`PermissionSetLicenseAssign`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetlicenseassign.htm)
 
-- Un Profile
-- Un Permission Set independiente
-- Un Permission Set agregado de un Permission Set Group
-- Un Muting Permission Set
+*Un usuario puede tener asignada la PSL mediante el `PermissionSet` que la otorga o directamente*.
 
-*Los campos de licencia definidos en PermissionSet aplican al registro específico, independientemente de su rol lógico.*
+SOQL Query para obtener lista de usuarios con licencias especificas asignadas: 
 
-Este campo `LicenseId` un lookup polimórfico que puede referenciar a:
+```SQL
+SELECT Id, Name, Username, Profile.Name
+FROM User
+WHERE 
+Id IN (
+    SELECT AssigneeId
+    FROM PermissionSetLicenseAssign
+    WHERE PermissionSetLicense.DeveloperName IN 
+        ('{PSL_DeveloperName}')
+)
+```
 
-• UserLicense
-• PermissionSetLicense
+## 5.3 Objeto PermissionSet
 
-El objeto PermissionSet puede tener dos tipos de restricciones relacionadas con licenciamiento:
+Como vimos anteriormente es una entidad polimórfica. Un registro en `PermissionSet` puede representar:
+
+- `Profile`
+- `Permission Set` Independiente
+- `Permission Set` Asociado a **Grupos**(PSG)
+
+El campo `LicenseId` es un lookup polimórfico que puede referenciar a:
+
+• `UserLicense`
+• `PermissionSetLicense`
+
+El objeto `PermissionSet` puede tener dos tipos de restricciones relacionadas con licenciamiento:
 
 - Restricción por **User License**
 - Restricción por **Permission Set License (PSL)**
 
 Este único campo modela las restricciones de licenciamiento del PermissionSet.
 
-Dependiendo del tipo de registro que represente el PermissionSet, el comportamiento de LicenseId cambia.
+Dependiendo del tipo de registro que represente el `PermissionSet`, el comportamiento de `LicenseId` cambia.
 
-### 4.3.1 Restricción por User License
+### 5.3.1 Restricción por UserLicense
 
 Cuando `LicenseId` apunta a un registro de `UserLicense`:
 
 - Define compatibilidad con el tipo de usuario.
-- Controla qué usuarios pueden recibir ese PermissionSet.
+- Controla qué usuarios pueden recibir ese `PermissionSet`.
 
-Un PermissionSet solo puede asignarse si:
+Un  `PermissionSet` solo puede asignarse si:
 
 - `User.Profile.UserLicenseId` es compatible con `PermissionSet.LicenseId`
 
 Comportamiento según tipo de registro:
 
-- Cuando el PermissionSet representa un Profile: `PermissionSet.LicenseId = Profile.UserLicenseId`.
-- Si es un Permission Set independiente (sin PSL): `LicenseId` indica con qué UserLicense puede asignarse.
-- El Permission Set agregado (consolidado) mantiene el mismo `LicenseId` (UserLicense) que los Permission Sets componentes del grupo. Salesforce no permite mezclar licencias incompatibles dentro de un mismo Permission Set Group.
-- El Muting Permission Set también está asociado al mismo UserLicense que el Group al que pertenece.
+- Cuando el `PermissionSet` representa un `Profile` : `PermissionSet.LicenseId` es igual a `Profile.UserLicenseId`.
+- Si es un `PermissionSet` independiente: `LicenseId` indica con qué `UserLicense` puede asignarse.
+- El **Permission Set consolidado por el sistema** del `PermissionSetGroup` mantiene el mismo `LicenseId` (UserLicense) que los `PermissionSets` componentes del grupo. Salesforce no permite mezclar licencias incompatibles dentro de un mismo `PermissionSetGroup`.
+- El `MutingPermissionSet` también está asociado al mismo UserLicense que el Group al que pertenece.
 
 En todos estos casos, `LicenseId` actúa como restricción de compatibilidad base.
 
-### 4.3.2 Restricción por Permission Set License (PSL)
+### 5.3.2 Restricción por PermissionSetLicense(PSL)
 
 Cuando `LicenseId` apunta a un registro de `PermissionSetLicense`:
 
-- El PermissionSet requiere una PSL específica.
+- El `PermissionSet` requiere una PSL específica.
 - Funciona como dependencia de add-on.
 - El usuario debe tener asignada esa PSL mediante PermissionSetLicenseAssign.
 
 Regla:
 
-Si `PermissionSet.LicenseId` referencia a un `PermissionSetLicense`, el usuario debe tener esa PSL asignada antes de recibir el PermissionSet.
-- Si no la tiene, Salesforce no permite asignar el PermissionSet.
+Si `PermissionSet.LicenseId` referencia a un `PermissionSetLicense` y este se asigna al usuario: 
+- Automaticamente salesforece crea registro del objecto `PermissionSetLicenseAssign`
 - Aplica únicamente a:
-  - Permission Sets independientes creados manualmente
-  - Permission Sets gestionados por paquetes
-  - Permission Sets estándar del sistema
+  - `PermissionSets` independientes creados manualmente
+  - `PermissionSets` gestionados por paquetes
+  - `PermissionSets` estándar del sistema
 
-**Permission Set consolidado por el sistema**
+**Permission Set consolidado por el sistema:**
 
-El Permission Set agregado o consolidado generado por el sistema:
+- Mantiene `LicenseId` apuntando a `UserLicense`.
+- No apunta a `PermissionSetLicense`(PSL).
+- No consolida múltiples `PSL.
+- No declara dependencia propia de `PSL`.
 
-- Mantiene LicenseId apuntando a UserLicense.
-- No apunta a PermissionSetLicense.
-- No consolida múltiples PSL.
-- No declara dependencia propia de PSL.
-
-Si un Permission Set Group contiene componentes cuyo `LicenseId` apunta a `PermissionSetLicense`:
+Si un `PermissionSetGroup` contiene componentes cuyo `LicenseId` apunta a `PermissionSetLicense`:
 
 - Salesforce valida la dependencia de PSL sobre cada componente individual.
-- La validación ocurre antes de generar o evaluar el Permission Set agregado.
-- El Permission Set agregado no participa en la validación de PSL.
+- La validación ocurre antes de generar o actualizar el **Permission Set consolidado por el sistema**.
 
-#### 4.3.3 Modelo de Validación Completo
-
-Al asignar un PermissionSet a un usuario, Salesforce valida el campo LicenseId.
-El comportamiento depende del tipo de registro al que apunte:
-
-- Si LicenseId apunta a UserLicense → Se valida que el Profile.UserLicenseId del usuario sea compatible.
--  Si LicenseId apunta a PermissionSetLicense → Se valida que el usuario tenga asignada esa PSL mediante PermissionSetLicenseAssign.
-
-Estas validaciones son automáticas y previas a la asignación.
-
-En el caso de Permission Set Groups, la validación se realiza sobre los Permission Sets componentes antes de consolidar el Permission Set agregado.
-
-
-# 6. Modelo Consolidado de Relaciones
+# 6. Arquitectura del modelo de seguridad
 
 ```
 User
 ├── Profile
 │     ├── UserLicense
-│     └── PermissionSet (IsOwnedByProfile = true)
+│     └── PermissionSet type Profile
 │           ├── LicenseId → UserLicense
 │           ├── ObjectPermissions
 │           ├── FieldPermissions
-│           └── System Permissions
 │
 ├── PermissionSetAssignment
-│     └── PermissionSet (independiente)
-│           ├── LicenseId → (UserLicense o PermissionSetLicense)
-│           ├── ObjectPermissions
-│           ├── FieldPermissions
-│           └── System Permissions
-│
-├── PermissionSetGroupAssignment
+│     │└── PermissionSet Type Regular
+│     │      ├── LicenseId → (UserLicense o PermissionSetLicense)
+│     │      ├── ObjectPermissions
+│     │      ├── FieldPermissions
+│     │
 │     ├── PermissionSetGroup
 │     │     ├── PermissionSetGroupComponent
-│     │     │     └── PermissionSet (componentes existentes)
-│     │     │           ├── LicenseId → (UserLicense o PermissionSetLicense)
-│     │     │
-│     │     └── Muting PermissionSet
-│     │           ├── PermissionSetGroupId != null
-│     │           └── LicenseId → UserLicense
-│     │
-│     └── PermissionSet (Agregado generado por sistema)
+│     │     │     └── PermissionSet Type Regular (componentes existentes)
+│     │     │           └── LicenseId → (UserLicense o PermissionSetLicense)
+│     │     └── MutingPermissionSet
+│     │           
+│     └── PermissionSet Type Group (consolidado por el sistema)
 │           ├── LicenseId → UserLicense
 │           └── Evaluado por el motor de seguridad
 │
@@ -655,61 +666,39 @@ User
       └── PermissionSetLicense (PSL)                  
 ```
 
-# 7. Evaluación de Permisos Efectivos (Se debe actualizar)
+Ahora si!! teniendo este entendimiento podemos pensar en la pregunta inicial **¿ Cuál es la mejor forma de gestionar y administrar los permisos de la plataforma ?**.
 
-El acceso efectivo es acumulativo.
+La arquitectura recomendada mediante la [Gestión de acceso y permisos de datos en salesforce](https://help.salesforce.com/s/articleView?id=platform.security_data_access_mgmt.htm&type=5) basado en un modelo modular y gobernable mediante el principio de **mínimos privilegios** es definir:
 
-- User License define el universo base.
-- Permission Set License habilita funcionalidades adicionales.
-- PermissionSets otorgan permisos dentro del marco permitido.
-- Permission Set Groups consolidan permisos.
-- El motor evalúa PermissionSets.
-- CRUD y FLS determinan acceso estructural.
-- Sharing determina acceso a registros.
-- Restriction Rules pueden reducir visibilidad.
+- **Profiles con mínimos accesos**
+  - Definen solo acceso base.
+  - No deben contener permisos amplios o excepcionales.
 
-Claves del modelo:
+- **Permission Sets para extender acceso**
+  - Cada PS representa una capacidad específica.
+  - Permite asignar acceso adicional sin modificar el Profile.
+  - Facilita trazabilidad y control de excepciones.
 
-- Profile es técnicamente un PermissionSet especial
-- Todo permiso estructural vive en PermissionSet
-- User nunca almacena permisos directamente
-- Los Permission Set Groups son una capa de gobernanza, no de permisos.
-- Los Permission Set Groups no agregan lógica adicional por sí mismos.
-- Los permisos nunca se restan (excepto con mecanismos específicos como Restriction Rules o Muting en PSG).
-- El resultado final es la suma de todos los permisos otorgados.
-- Record-level security es independiente de CRUD y FLS
-- La evaluación ocurre en capas secuenciales
+- **Permission Set Groups para modelar roles**
+  - Agrupan capacidades funcionales.
+  - Representan responsabilidades de negocio.
+  - Permiten gestionar permisos de manera estructurada.
 
-```
-User
-↓
-Profile
-↓
-UserLicense (define universo base)
-↓
-PermissionSet.LicenseId compatible
-↓
-Si existe PermissionSetLicenseId
-↓
-Usuario debe tener PermissionSetLicenseAssign
-↓
-Motor evalúa PermissionSets
-↓
-CRUD → FLS → Sharing → Restriction Rules
-```
+Para con esto adoptar:
 
-# Conclusión ((Se debe actualizar))
+- **Mayor trazabilidad**
+  - Claridad sobre qué permiso otorga cada capacidad.
+  - Facilidad para auditorías y revisiones.
 
-El modelo de permisos en Salesforce está diseñado bajo:
+- **Control más granular**
+  - Menor dependencia en accesos globales.
+  - Acceso alineado a necesidades reales del negocio.
 
-- Separación entre definición de permisos y asignación
-- Modelo acumulativo
-- Evaluación por capas
-- Abstracción para escalabilidad (Permission Set Groups)
-- Comprender el schema real permite:
+- **Reducción de acumulación de privilegios**
+  - Separación clara entre acceso base y acceso extendido.
+  - Menor riesgo de sobreasignación.
+  - Menor riesgo en detención de vulnerabilidades por pruebas de ethical hacking 
 
-Diseñar arquitecturas escalables
-
-- Realizar auditorías precisas
-- Resolver problemas de acceso complejos
-- Evitar anti‑patterns en seguridad
+- **Arquitectura más sostenible**
+  - Menor deuda técnica.
+  - Modelo más simple de mantener.
