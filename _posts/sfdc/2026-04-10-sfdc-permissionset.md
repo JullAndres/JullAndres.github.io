@@ -15,13 +15,13 @@ tags:
   - profile
   - permissionset
   - permissionsetgroup
-  - ObjectPermissions
-  - FieldPermissions
-  - SetupEntityAccess
-  - PermissionSetGroupComponent
-  - PermissionSetAssignment
-  - UserLicense
-  - Permissionsetlicense
+  - objectpermissions
+  - fieldpermissions
+  - setupentityaccess
+  - permissionsetgroupcomponent
+  - permissionsetassignment
+  - userlicense
+  - permissionsetlicense
 ---
 
 # About
