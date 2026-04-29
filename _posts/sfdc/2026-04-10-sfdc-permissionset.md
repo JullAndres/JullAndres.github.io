@@ -55,7 +55,7 @@ Cada capa cumple una función específica dentro del cálculo del acceso efectiv
   - [1.1 User](#11-user)
   - [1.2 Profile](#12-profile)
 - [2. Objeto PermissionSet – Unidad Básica de Permisos y Nucleo del modelo](#2-objeto-permissionset--unidad-básica-de-permisos-y-núcleo-del-modelo)
-  - [2.1 Unidad Básica de Permisos](#21-unidad-básica-de-permisos)
+  - [2.1 Unidad Básica de Permisos](#21-unidad-basica-de-permisos)
     - [2.1.1 ObjectPermissions](#211-objectpermissions)
     - [2.1.2 FieldPermissions](#212-fieldpermissions)
     - [2.1.3 SetupEntityAccess](#213-setupentityaccess)
@@ -148,7 +148,7 @@ Contiene tanto permisos de sistema como relaciones a objetos hijos que represent
 
 Es en este objeto donde radica el poder del motor se seguridad de salesforce dado su comportamiento polimórfico.
 
-## 2.1 Unidad Básica de Permisos
+## 2.1 Unidad Basica de Permisos
 
 Los permisos reales se **almacenan en objetos relacionados**.
 
