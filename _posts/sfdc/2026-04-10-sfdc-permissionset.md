@@ -54,25 +54,26 @@ Cada capa cumple una función específica dentro del cálculo del acceso efectiv
 - [1. Identidad y Permiso Base](#1-identidad-y-permiso-base)
   - [1.1 User](#11-user)
   - [1.2 Profile](#12-profile)
-- [2. Objeto PermissionSet – Unidad Básica de Permisos y Nucleo del modelo](#2-objeto-permissionset--unidad-básica-de-permisos-y-núcleo-del-modelo)
+- [2. Objeto PermissionSet – Unidad Básica de Permisos y Nucleo del modelo](#2-objeto-permissionset--unidad-basica-de-permisos-y-nucleo-del-modelo)
   - [2.1 Unidad Básica de Permisos](#21-unidad-basica-de-permisos)
     - [2.1.1 ObjectPermissions](#211-objectpermissions)
     - [2.1.2 FieldPermissions](#212-fieldpermissions)
     - [2.1.3 SetupEntityAccess](#213-setupentityaccess)
-  - [2.2 Nucleo del modelo y Naturaleza Polimórfica](#22-núcleo-del-modelo-y-naturaleza-polimórfica)
+  - [2.2 Nucleo del modelo y Naturaleza Polimórfica](#22-nucleo-del-modelo-y-naturaleza-polimorfica)
     - [2.2.1 Profile](#221-profile)
     - [2.2.2 Permission Set](#222-permission-set)
     - [2.2.3 Permission Set Group](#223-permission-set-group)
-- [3. Objecto PermissionSetGroup - Capa de abstracción orientada a la gobernanza y escalabilidad](#3-objecto-permissionsetgroup---capa-de-abstracción-orientada-a-la-gobernanza-y-escalabilidad)
+- [3. Objecto PermissionSetGroup - Capa de abstracción orientada a la gobernanza y escalabilidad](#3-objecto-permissionsetgroup---capa-de-abstraccion-orientada-a-la-gobernanza-y-escalabilidad)
   - [3.1 PermissionSetGroupComponent](#31-permissionsetgroupcomponent)
-- [4. Asignación de Permisos a Usuarios](#4-asignación-de-permisos-a-usuarios)
+- [4. Asignación de Permisos a Usuarios](#4-asignacion-de-permisos-a-usuarios)
   - [4.1 PermissionSetAssignment](#41-permissionsetassignment)
 - [5. Licenciamiento](#5-licenciamiento)
   - [5.1 UserLicense](#51-userlicense)
   - [5.2 PermissionsetLicense(PSL)](#52-permissionsetlicense-psl)
   - [5.3 Objeto PermissionSet](#53-objeto-permissionset)
-    - [5.3.1 Restricción por User License](#531-restricción-por-userlicense)
-    - [5.3.2 Restricción por Permission Set License(PSL)](#532-restricción-por-permissionsetlicensepsl)
+    - [5.3.1 Restricción por User License](#531-restriccion-por-userlicense)
+    - [5.3.2 Restricción por Permission Set License(PSL)](#532-restriccion-por-permissionsetlicensepsl)
+- [6. Arquitectura del modelo de seguridad](#6-arquitectura-del-modelo-de-seguridad)
 
 
 # 1. Identidad y Permiso Base
@@ -128,7 +129,7 @@ Esto significa que: *Profile es técnicamente es un `PermissionSet`*
 
 ACLARACIÓN: **En este contexto `PermissionSet` hace referencia al mecanismo interno donde salesforce alcanema los permisos para ser evaluados de forma automática por su sistema**. 
 
-# 2. Objeto PermissionSet – Unidad Básica de Permisos y Núcleo del modelo
+# 2. Objeto PermissionSet – Unidad Basica de Permisos y Nucleo del modelo
 
 API Name: [`PermissionSet`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionset.htm)
 
@@ -222,7 +223,7 @@ Permite acceso a componentes de metadata como:
 - `SetupEntityType`
 
 
-## 2.2 Núcleo del modelo y Naturaleza Polimórfica
+## 2.2 Nucleo del modelo y Naturaleza Polimorfica
 
 Un registro en el objeto `PermissionSet` es la unidad real que el motor de seguridad evalúa.
 
@@ -393,7 +394,7 @@ Se usa cuando no se desea asignar a los usuarios todos los permisos incluidos en
 - No elimina permisos estructuralmente.
 - Define exclusiones aplicadas durante la consolidación del grupo.
 
-# 3. Objecto PermissionSetGroup - Capa de abstracción orientada a la gobernanza y escalabilidad.
+# 3. Objecto PermissionSetGroup - Capa de abstraccion orientada a la gobernanza y escalabilidad.
 
 API Name: [`PermissionSetGroup`](https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionsetgroup.htm)
 
@@ -430,7 +431,7 @@ Cada registro indica que un `PermissionSet` forma parte del grupo.
 
 *Es la capa estructural que conecta agrupación con permisos reales.*
 
-# 4. Asignación de Permisos a Usuarios
+# 4. Asignacion de Permisos a Usuarios
 
 Los permisos nunca se asignan directamente al usuario, siempre se asignan mediante estructuras intermedias.
 
@@ -586,7 +587,7 @@ Este único campo modela las restricciones de licenciamiento del PermissionSet.
 
 Dependiendo del tipo de registro que represente el `PermissionSet`, el comportamiento de `LicenseId` cambia.
 
-### 5.3.1 Restricción por UserLicense
+### 5.3.1 Restriccion por UserLicense
 
 Cuando `LicenseId` apunta a un registro de `UserLicense`:
 
@@ -606,7 +607,7 @@ Comportamiento según tipo de registro:
 
 En todos estos casos, `LicenseId` actúa como restricción de compatibilidad base.
 
-### 5.3.2 Restricción por PermissionSetLicense(PSL)
+### 5.3.2 Restriccion por PermissionSetLicense(PSL)
 
 Cuando `LicenseId` apunta a un registro de `PermissionSetLicense`:
 
